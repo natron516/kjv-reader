@@ -487,8 +487,8 @@ function renderBookList() {
       item.addEventListener("click", () => {
         state.bookIndex = i;
         closeBookModal();
-        // Flow to chapter selection instead of loading chapter 1
-        openChapterModal();
+        // Small delay so book modal finishes closing before chapter modal opens
+        setTimeout(() => openChapterModal(), 50);
       });
       list.appendChild(item);
     });
