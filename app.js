@@ -854,7 +854,9 @@ function createHlCard(h) {
 
     const titleEl = document.createElement("span");
     titleEl.className = "hl-card-note-title";
-    titleEl.textContent = h.title || "Untitled";
+    // Show first line of note text as preview, or "Note" if empty
+    const firstLine = (h.note || "").split("\n")[0].substring(0, 60);
+    titleEl.textContent = firstLine || "Note";
 
     header.appendChild(icon);
     header.appendChild(titleEl);
