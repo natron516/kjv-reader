@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="KJV Reader" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <title>KJV Reader</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== Top Navigation ===== -->
+  <nav id="top-nav">
+    <button id="nav-prev" title="Previous chapter" aria-label="Previous chapter">&#8592;</button>
+    <button id="nav-book-btn">Genesis</button>
+    <button id="nav-chapter-btn">Ch 1</button>
+    <button id="nav-next" title="Next chapter" aria-label="Next chapter">&#8594;</button>
+    <div id="nav-spacer"></div>
+    <input id="jump-input" type="text" placeholder="John 3&#8230;" autocomplete="off" autocorrect="off" spellcheck="false" />
+  </nav>
+
+  <!-- ===== Main area ===== -->
+  <main id="main-area">
+
+    <!-- Reading View -->
+    <div id="reading-view" class="view">
+      <div id="chapter-header">
+        <h1 id="chapter-title">Loading…</h1>
+      </div>
+      <div id="verse-container">
+        <div id="loading-indicator"><div class="spinner"></div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- Highlights View -->
+    <div id="highlights-view" class="view hidden">
+      <div id="hl-toolbar">
+        <div class="hl-tabs">
+          <button class="hl-tab active" id="hl-tab-date">By Date</button>
+          <button class="hl-tab" id="hl-tab-book">By Book</button>
+        </div>
+        <div class="hl-filters">
+          <input id="hl-search" type="text" placeholder="Search highlights…" autocomplete="off" />
+          <!-- All filter -->
+          <div class="hl-color-filter all-filter active" title="All colors" data-color=""></div>
+          <!-- Individual color filters — populated by JS -->
+          <div class="hl-color-filter" title="Yellow"></div>
+          <div class="hl-color-filter" title="Green"></div>
+          <div class="hl-color-filter" title="Blue"></div>
+          <div class="hl-color-filter" title="Pink"></div>
+          <div class="hl-color-filter" title="Orange"></div>
+        </div>
+      </div>
+      <div id="hl-list"></div>
+    </div>
+
+    <!-- Settings View -->
+    <div id="settings-view" class="view hidden">
+      <div class="settings-section">
+        <div class="settings-title">Reading</div>
+        <div class="setting-row">
+          <span class="setting-label">Font Size</span>
+          <input id="font-size-slider" type="range" min="14" max="28" value="19" />
+          <span class="setting-value" id="font-size-value">19px</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Dark Mode</span>
+          <label class="toggle">
+            <input type="checkbox" id="dark-mode-toggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-title">Highlights</div>
+        <div class="setting-row">
+          <span class="setting-label">Clear All Highlights</span>
+          <button class="btn-danger" id="clear-highlights-btn">Clear</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-title">About</div>
+        <div class="setting-row">
+          <span class="setting-label">KJV Reader</span>
+          <span class="setting-value" style="color:var(--text3)">v1.0</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label" style="font-size:13px;color:var(--text2)">
+            Bible text via <a href="https://bible-api.com" target="_blank" style="color:var(--accent)">bible-api.com</a>
+            (KJV). Chapters are cached locally for offline reading.
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== Bottom Navigation ===== -->
+  <nav id="bottom-nav">
+    <button class="bot-btn active" id="bot-read">
+      <span class="icon">📖</span>
+      <span>Read</span>
+    </button>
+    <button class="bot-btn" id="bot-highlights">
+      <span class="icon">✏️</span>
+      <span>Highlights</span>
+    </button>
+    <button class="bot-btn" id="bot-settings">
+      <span class="icon">⚙️</span>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+</div><!-- #app -->
+
+<!-- ===== Color Picker (floating) ===== -->
+<div id="color-picker" class="hidden" role="toolbar" aria-label="Highlight color picker">
+  <div class="cp-dot" data-color="" title="Yellow"></div>
+  <div class="cp-dot" data-color="" title="Green"></div>
+  <div class="cp-dot" data-color="" title="Blue"></div>
+  <div class="cp-dot" data-color="" title="Pink"></div>
+  <div class="cp-dot" data-color="" title="Orange"></div>
+  <div class="cp-divider"></div>
+  <button class="cp-remove" id="cp-remove" title="Remove highlight" style="display:none">✕</button>
+</div>
+
+<!-- ===== Toast ===== -->
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- ===== Book selector modal ===== -->
+<div id="book-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Select a book">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Choose a Book</span>
+      <button class="modal-close" id="book-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ===== Chapter selector modal ===== -->
+<div id="chapter-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Select a chapter">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Choose a Chapter</span>
+      <button class="modal-close" id="chapter-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="chapter-grid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="bible-books.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
