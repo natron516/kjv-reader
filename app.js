@@ -151,7 +151,7 @@ function initDom() {
     // Note modal
     noteModal:          $("note-modal"),
     noteModalTitle:     $("note-modal-title"),
-    noteTitleInput:     $("note-title-input"),
+    // noteTitleInput removed
     noteTextarea:       $("note-textarea"),
     noteBtnSave:        $("note-btn-save"),
     noteBtnCancel:      $("note-btn-cancel"),
@@ -442,7 +442,7 @@ function refreshVerseHighlights() {
 function openNoteModal(existingNote) {
   const isNew = !existingNote;
   dom.noteModalTitle.textContent = isNew ? 'New Note' : 'Edit Note';
-  dom.noteTitleInput.value = existingNote ? (existingNote.title || '') : '';
+  // title input removed
   dom.noteTextarea.value = existingNote ? existingNote.note : '';
   dom.noteBtnDelete.classList.toggle('hidden', isNew);
 
@@ -459,7 +459,7 @@ function closeNoteModal() {
 
 function saveNote() {
   const noteText = dom.noteTextarea.value.trim();
-  const titleText = dom.noteTitleInput.value.trim();
+  const titleText = '';
   if (!noteText) {
     showToast('Note is empty');
     return;
