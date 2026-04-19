@@ -926,29 +926,32 @@ body.light .verse-block[data-highlight] .verse-text {
 
 /* ---------- Floating Note button on reading view ---------- */
 .fab-note {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  font-size: 22px;
+  position: fixed !important;
+  bottom: 90px !important;
+  right: 20px !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  background: #D4A843 !important;
+  color: #1a1a2e !important;
+  border: 2px solid #fff !important;
+  font-size: 24px !important;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  z-index: 50;
-  display: flex;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+  z-index: 999 !important;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition: transform 0.15s;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 .fab-note:active {
   transform: scale(0.92);
 }
 @media (min-width: 768px) {
-  .fab-note { bottom: 30px; right: 30px; }
+  .fab-note { bottom: 40px !important; right: 30px !important; }
 }
 
 /* ---------- New Note button in highlights panel ---------- */
