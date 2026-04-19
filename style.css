@@ -833,6 +833,11 @@ body.light .verse-block[data-highlight] .verse-text {
 
 /* ---------- Split layout: toggleable via .split-active on #main-area (≥768px) ---------- */
 @media (min-width: 768px) {
+  /* When NOT in split mode, make sure highlights is fully hidden */
+  #highlights-view.hidden {
+    display: none !important;
+  }
+
   #main-area.split-active {
     display: flex;
     flex-direction: row;
