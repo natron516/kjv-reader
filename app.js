@@ -715,13 +715,26 @@ function showView(name) {
       dom.settingsView.classList.remove('hidden');
       dom.botSettings.classList.add('active');
       // Leave split state as-is
+    } else if (name === 'search') {
+      dom.settingsView.classList.add('hidden');
+      if (state.splitOpen) closeSplitPanel();
+      dom.searchView.classList.remove('hidden');
+      dom.readingView.classList.add('hidden');
+      dom.botRead.classList.remove('active');
+      dom.botSearch.classList.add('active');
+      dom.botHighlights.classList.remove('active');
+      dom.botSettings.classList.remove('active');
+      focusSearchInput();
     } else {
       // reading
       dom.settingsView.classList.add('hidden');
+      dom.searchView.classList.add('hidden');
       // Close split panel if open
       if (state.splitOpen) closeSplitPanel();
       else {
+        dom.readingView.classList.remove('hidden');
         dom.botRead.classList.add('active');
+        dom.botSearch.classList.remove('active');
         dom.botHighlights.classList.remove('active');
         dom.botSettings.classList.remove('active');
       }
@@ -735,16 +748,18 @@ function showView(name) {
     // Ensure no lingering split-active class
     dom.mainArea.classList.remove('split-active');
 
-    ["reading", "highlights", "settings"].forEach(v => {
+    ["reading", "search", "highlights", "settings"].forEach(v => {
       const el = $(`${v}-view`);
       if (el) el.classList.toggle("hidden", v !== name);
     });
     dom.botRead.classList.toggle("active", name === "reading");
+    dom.botSearch.classList.toggle("active", name === "search");
     dom.botHighlights.classList.toggle("active", name === "highlights");
     dom.botSettings.classList.toggle("active", name === "settings");
 
     if (name === "highlights") renderHighlights();
     if (name === "reading") closeColorPicker();
+    if (name === "search") focusSearchInput();
   }
 }
 
@@ -1148,6 +1163,121 @@ function initModalClose() {
   dom.noteBtnDelete.addEventListener("click", deleteNote);
 }
 
+// -------- Search --------
+let searchDebounce;
+
+function focusSearchInput() {
+  setTimeout(() => { if (dom.searchInput) dom.searchInput.focus(); }, 200);
+}
+
+function initSearch() {
+  dom.searchInput.addEventListener("input", () => {
+    const q = dom.searchInput.value.trim();
+    dom.searchClearBtn.classList.toggle("hidden", !q);
+    clearTimeout(searchDebounce);
+    if (!q) {
+      dom.searchStatus.textContent = "";
+      dom.searchResults.innerHTML = "";
+      return;
+    }
+    searchDebounce = setTimeout(() => runSearch(q), 350);
+  });
+
+  dom.searchInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      clearTimeout(searchDebounce);
+      const q = dom.searchInput.value.trim();
+      if (q) runSearch(q);
+    }
+  });
+
+  dom.searchClearBtn.addEventListener("click", () => {
+    dom.searchInput.value = "";
+    dom.searchClearBtn.classList.add("hidden");
+    dom.searchStatus.textContent = "";
+    dom.searchResults.innerHTML = "";
+    dom.searchInput.focus();
+  });
+}
+
+async function runSearch(query) {
+  dom.searchStatus.innerHTML = `<span class="search-spinner"></span> Loading Bible data…`;
+  dom.searchResults.innerHTML = "";
+
+  try {
+    await BibleSearch.loadBibleData(msg => {
+      dom.searchStatus.innerHTML = `<span class="search-spinner"></span> ${msg}`;
+    });
+  } catch (err) {
+    dom.searchStatus.textContent = "Failed to load Bible data. Check your connection.";
+    return;
+  }
+
+  // Bail if query changed while loading
+  const currentQuery = dom.searchInput.value.trim();
+  if (currentQuery.toLowerCase() !== query.toLowerCase()) return;
+
+  const results = BibleSearch.searchBible(query, 100);
+  const total   = BibleSearch.countBibleMatches(query);
+
+  if (results.length === 0) {
+    dom.searchStatus.textContent = `No results for “${query}”`;
+    dom.searchResults.innerHTML = `
+      <div class="search-empty">
+        <div class="search-empty-icon">🔍</div>
+        <p>No verses found for <strong>“${escapeHtml(query)}”</strong>.<br>Try a different word or phrase.</p>
+      </div>`;
+    return;
+  }
+
+  const cappedMsg = total > 100 ? ` (showing first 100)` : "";
+  dom.searchStatus.textContent = `${total} verse${total === 1 ? "" : "s"} found for “${query}”${cappedMsg}`;
+
+  dom.searchResults.innerHTML = "";
+  results.forEach(r => {
+    const card = document.createElement("div");
+    card.className = "search-result-card";
+    card.innerHTML = `
+      <div class="search-result-ref">${escapeHtml(r.reference)}</div>
+      <div class="search-result-text">${r.highlighted}</div>
+    `;
+    card.addEventListener("click", () => navigateToSearchResult(r));
+    dom.searchResults.appendChild(card);
+  });
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function navigateToSearchResult(result) {
+  // Match bookIndex to BIBLE_BOOKS by name
+  let bookIdx = result.bookIndex;
+  const match = BIBLE_BOOKS.findIndex(b => b.name.toLowerCase() === result.book.toLowerCase());
+  if (match >= 0) bookIdx = match;
+
+  state.bookIndex = bookIdx;
+  state.chapter   = result.chapter;
+  savePosition();
+
+  showView("reading");
+  loadAndRenderChapter(result.verse);
+  setTimeout(() => flashVerse(result.verse), 600);
+}
+
+function flashVerse(verseNum) {
+  const block = dom.verseContainer.querySelector(`[data-verse="${verseNum}"]`);
+  if (!block) return;
+  block.classList.remove("verse-flash");
+  void block.offsetWidth; // force reflow
+  block.classList.add("verse-flash");
+  block.addEventListener("animationend", () => block.classList.remove("verse-flash"), { once: true });
+}
+
 // -------- Init --------
 function init() {
   loadHighlights();
@@ -1158,6 +1288,7 @@ function init() {
   initColorPicker();
   initHlFilters();
   initSettings();
+  initSearch();
   initSwipe();
   initModalClose();
   initAuthUI();
@@ -1172,6 +1303,7 @@ function init() {
 
   // Bottom nav
   dom.botRead.addEventListener("click", () => showView("reading"));
+  dom.botSearch.addEventListener("click", () => showView("search"));
   dom.botHighlights.addEventListener("click", () => showView("highlights"));
   dom.botSettings.addEventListener("click", () => showView("settings"));
 
