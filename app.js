@@ -112,7 +112,6 @@ function initDom() {
     colorPicker:   $("color-picker"),
     cpDots:        document.querySelectorAll(".cp-dot"),
     cpRemove:      $("cp-remove"),
-    cpNote:        $("cp-note"),
 
     botRead:       $("bot-read"),
     botHighlights: $("bot-highlights"),
@@ -123,6 +122,7 @@ function initDom() {
     hlTabBook:      $("hl-tab-book"),
     hlSearch:       $("hl-search"),
     hlList:         $("hl-list"),
+    newNoteBtn:     $("new-note-btn"),
     hlColorFilters: document.querySelectorAll(".hl-color-filter"),
     hlColorFiltersRow: $("hl-color-filters-row"),
     hlSigninPrompt: $("hl-signin-prompt"),
@@ -150,8 +150,8 @@ function initDom() {
 
     // Note modal
     noteModal:          $("note-modal"),
-    noteModalRef:       $("note-modal-ref"),
-    noteModalVerseText: $("note-modal-verse-text"),
+    noteModalTitle:     $("note-modal-title"),
+    noteTitleInput:     $("note-title-input"),
     noteTextarea:       $("note-textarea"),
     noteBtnSave:        $("note-btn-save"),
     noteBtnCancel:      $("note-btn-cancel"),
@@ -219,15 +219,14 @@ function getHighlightForVerse(bookIndex, chapter, verse) {
   return state.highlights.find(h => h.type !== 'note' && h.bookIndex === bookIndex && h.chapter === chapter && h.verse === verse) || null;
 }
 
-function getNoteForVerse(bookIndex, chapter, verse) {
-  return state.highlights.find(h => h.type === 'note' && h.bookIndex === bookIndex && h.chapter === chapter && h.verse === verse) || null;
+function getNoteById(id) {
+  return state.highlights.find(h => h.id === id) || null;
 }
 
 function renderVerses(verses, scrollToVerse) {
   dom.verseContainer.innerHTML = "";
   verses.forEach(v => {
     const hl   = getHighlightForVerse(state.bookIndex, state.chapter, v.verse);
-    const note = getNoteForVerse(state.bookIndex, state.chapter, v.verse);
     const verseText = v.text.replace(/\n/g, " ").trim();
 
     const block = document.createElement("div");
@@ -244,12 +243,6 @@ function renderVerses(verses, scrollToVerse) {
 
     block.appendChild(numEl);
 
-    // Note indicator (between verse-num and verse-text)
-    if (note) {
-      const ind = createNoteIndicator(state.bookIndex, state.chapter, v.verse, verseText);
-      block.appendChild(ind);
-    }
-
     const textEl = document.createElement("span");
     textEl.className = "verse-text";
     textEl.textContent = verseText;
@@ -265,20 +258,6 @@ function renderVerses(verses, scrollToVerse) {
       if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
   }
-}
-
-function createNoteIndicator(bookIndex, chapter, verseNum, verseText) {
-  const book = BIBLE_BOOKS[bookIndex];
-  const ind = document.createElement("span");
-  ind.className = "verse-note-indicator";
-  ind.textContent = "📝";
-  const note = getNoteForVerse(bookIndex, chapter, verseNum);
-  if (note) ind.title = note.note;
-  ind.addEventListener("click", e => {
-    e.stopPropagation();
-    openNoteModal(bookIndex, chapter, verseNum, verseText, book.name);
-  });
-  return ind;
 }
 
 // -------- Verse click & highlighting --------
@@ -446,7 +425,6 @@ function removeHighlight() {
 function refreshVerseHighlights() {
   document.querySelectorAll(".verse-block").forEach(block => {
     const verseNum = parseInt(block.dataset.verse, 10);
-    const verseText = block.querySelector(".verse-text")?.textContent || "";
 
     // Highlight styling
     const hl = getHighlightForVerse(state.bookIndex, state.chapter, verseNum);
@@ -457,35 +435,18 @@ function refreshVerseHighlights() {
       delete block.dataset.highlight;
       block.style.removeProperty("--hl-color");
     }
-
-    // Note indicator
-    const note = getNoteForVerse(state.bookIndex, state.chapter, verseNum);
-    let ind = block.querySelector(".verse-note-indicator");
-
-    if (note && !ind) {
-      ind = createNoteIndicator(state.bookIndex, state.chapter, verseNum, verseText);
-      const numEl = block.querySelector(".verse-num");
-      numEl.after(ind);
-    } else if (!note && ind) {
-      ind.remove();
-    }
-    if (ind && note) {
-      ind.title = note.note;
-    }
   });
 }
 
 // -------- Notes --------
-function openNoteModal(bookIndex, chapter, verseNum, verseText, bookName) {
-  const existingNote = getNoteForVerse(bookIndex, chapter, verseNum);
-  const ref = `${bookName} ${chapter}:${verseNum}`;
-
-  dom.noteModalRef.textContent = ref;
-  dom.noteModalVerseText.textContent = verseText;
+function openNoteModal(existingNote) {
+  const isNew = !existingNote;
+  dom.noteModalTitle.textContent = isNew ? 'New Note' : 'Edit Note';
+  dom.noteTitleInput.value = existingNote ? (existingNote.title || '') : '';
   dom.noteTextarea.value = existingNote ? existingNote.note : '';
-  dom.noteBtnDelete.classList.toggle('hidden', !existingNote);
+  dom.noteBtnDelete.classList.toggle('hidden', isNew);
 
-  state.noteContext = { bookIndex, chapter, verse: verseNum, text: verseText, book: bookName, ref };
+  state.noteContext = existingNote ? { id: existingNote.id } : null;
 
   dom.noteModal.classList.remove('hidden');
   setTimeout(() => dom.noteTextarea.focus(), 150);
@@ -497,65 +458,52 @@ function closeNoteModal() {
 }
 
 function saveNote() {
-  if (!state.noteContext) return;
-  const { bookIndex, chapter, verse, text, book, ref } = state.noteContext;
   const noteText = dom.noteTextarea.value.trim();
+  const titleText = dom.noteTitleInput.value.trim();
   if (!noteText) {
     showToast('Note is empty');
     return;
   }
 
-  const existingNote = getNoteForVerse(bookIndex, chapter, verse);
   const now = new Date().toISOString();
-  const bookSlug = book.toLowerCase().replace(/\s+/g, '-');
-  const id = existingNote ? existingNote.id : `note-${bookSlug}-${chapter}-${verse}-${Date.now()}`;
+  let entry;
 
-  const entry = {
-    id,
-    type:      'note',
-    reference: ref,
-    text,
-    note:      noteText,
-    date:      existingNote ? existingNote.date : now,
-    updatedAt: now,
-    book,
-    bookIndex,
-    chapter,
-    verse,
-  };
-
-  if (existingNote) {
-    const idx = state.highlights.findIndex(h => h.id === existingNote.id);
-    if (idx >= 0) state.highlights[idx] = entry;
-    else state.highlights.push(entry);
+  if (state.noteContext && state.noteContext.id) {
+    // Editing existing note
+    const idx = state.highlights.findIndex(h => h.id === state.noteContext.id);
+    if (idx >= 0) {
+      entry = { ...state.highlights[idx], title: titleText, note: noteText, updatedAt: now };
+      state.highlights[idx] = entry;
+    }
   } else {
+    // New note
+    entry = {
+      id: `note-${Date.now()}`,
+      type: 'note',
+      title: titleText,
+      note: noteText,
+      date: now,
+      updatedAt: now,
+    };
     state.highlights.push(entry);
   }
 
   saveHighlights();
-  refreshVerseHighlights();
   if (isSplitMode() || state.view === 'highlights') renderHighlights();
   closeNoteModal();
   showToast('Note saved ✓');
-
-  if (window.Sync) Sync.onHighlightChange(entry);
+  if (entry && window.Sync) Sync.onHighlightChange(entry);
 }
 
 function deleteNote() {
-  if (!state.noteContext) return;
-  const { bookIndex, chapter, verse } = state.noteContext;
-  const existingNote = getNoteForVerse(bookIndex, chapter, verse);
-  if (!existingNote) return;
-
-  const id = existingNote.id;
+  if (!state.noteContext || !state.noteContext.id) return;
+  const id = state.noteContext.id;
   state.highlights = state.highlights.filter(h => h.id !== id);
 
   saveHighlights();
-  refreshVerseHighlights();
   if (isSplitMode() || state.view === 'highlights') renderHighlights();
   closeNoteModal();
   showToast('Note deleted');
-
   if (window.Sync) Sync.onHighlightRemove(id);
 }
 
@@ -825,9 +773,10 @@ function renderHighlights() {
   // Search filter
   if (search) {
     list = list.filter(h =>
-      (h.text  && h.text.toLowerCase().includes(search)) ||
-      (h.note  && h.note.toLowerCase().includes(search)) ||
-      h.reference.toLowerCase().includes(search)
+      (h.text      && h.text.toLowerCase().includes(search)) ||
+      (h.note      && h.note.toLowerCase().includes(search)) ||
+      (h.title     && h.title.toLowerCase().includes(search)) ||
+      (h.reference && h.reference.toLowerCase().includes(search))
     );
   }
 
@@ -835,10 +784,10 @@ function renderHighlights() {
 
   if (list.length === 0) {
     const emptyMsg = state.hlTypeFilter === 'note'
-      ? "No notes yet.<br>Tap a verse then 📝 to add a note."
+      ? "No notes yet.<br>Tap \"+ New Note\" to write your first journal entry."
       : state.hlTypeFilter === 'highlight'
       ? "No highlights yet.<br>Tap any verse to highlight it."
-      : "No highlights or notes yet.<br>Tap any verse while reading.";
+      : "No highlights or notes yet.<br>Tap any verse to highlight, or tap \"+ New Note\" to journal.";
     dom.hlList.innerHTML = `<div class="hl-empty"><div class="hl-empty-icon">${state.hlTypeFilter === 'note' ? '📝' : '✏️'}</div><p>${emptyMsg}</p></div>`;
     return;
   }
@@ -865,18 +814,24 @@ function renderHighlightsByDate(list) {
 
 function renderHighlightsByBook(list) {
   list.sort((a, b) => {
-    if (a.bookIndex !== b.bookIndex) return a.bookIndex - b.bookIndex;
-    if (a.chapter !== b.chapter) return a.chapter - b.chapter;
-    return a.verse - b.verse;
+    const aIsNote = a.type === 'note' && !a.bookIndex;
+    const bIsNote = b.type === 'note' && !b.bookIndex;
+    if (aIsNote && bIsNote) return new Date(b.date) - new Date(a.date);
+    if (aIsNote) return 1;
+    if (bIsNote) return -1;
+    if (a.bookIndex !== b.bookIndex) return (a.bookIndex || 0) - (b.bookIndex || 0);
+    if (a.chapter !== b.chapter) return (a.chapter || 0) - (b.chapter || 0);
+    return (a.verse || 0) - (b.verse || 0);
   });
-  let lastBook = null;
+  let lastGroup = null;
   list.forEach(h => {
-    if (h.book !== lastBook) {
+    const group = (h.type === 'note' && !h.book) ? 'Notes' : h.book;
+    if (group !== lastGroup) {
       const header = document.createElement("div");
       header.className = "hl-date-header";
-      header.textContent = h.book;
+      header.textContent = group;
       dom.hlList.appendChild(header);
-      lastBook = h.book;
+      lastGroup = group;
     }
     dom.hlList.appendChild(createHlCard(h));
   });
@@ -897,12 +852,12 @@ function createHlCard(h) {
     icon.className = "hl-card-icon";
     icon.textContent = "📝";
 
-    const ref = document.createElement("span");
-    ref.className = "hl-card-ref";
-    ref.textContent = h.reference;
+    const titleEl = document.createElement("span");
+    titleEl.className = "hl-card-note-title";
+    titleEl.textContent = h.title || "Untitled";
 
     header.appendChild(icon);
-    header.appendChild(ref);
+    header.appendChild(titleEl);
 
     const noteText = document.createElement("div");
     noteText.className = "hl-card-text hl-card-note-text";
@@ -917,21 +872,7 @@ function createHlCard(h) {
     card.appendChild(date);
 
     card.addEventListener("click", () => {
-      state.bookIndex = h.bookIndex;
-      state.chapter   = h.chapter;
-      savePosition();
-      if (isSplitMode()) {
-        state.view = "reading";
-        dom.botRead.classList.add("active");
-        dom.botSettings.classList.remove("active");
-        if (dom.settingsView) dom.settingsView.classList.add("hidden");
-        loadAndRenderChapter(h.verse);
-        setTimeout(() => openNoteModal(h.bookIndex, h.chapter, h.verse, h.text, h.book), 450);
-      } else {
-        showView("reading");
-        loadAndRenderChapter(h.verse);
-        setTimeout(() => openNoteModal(h.bookIndex, h.chapter, h.verse, h.text, h.book), 450);
-      }
+      openNoteModal(h);
     });
   } else {
     card.style.setProperty("--hl-color", h.color);
@@ -1115,17 +1056,6 @@ function initColorPicker() {
     dot.addEventListener("click", e => { e.stopPropagation(); applyHighlightColor(c.hex); });
   });
   dom.cpRemove.addEventListener("click", e => { e.stopPropagation(); removeHighlight(); });
-  dom.cpNote.addEventListener("click", e => {
-    e.stopPropagation();
-    if (!state.selectedVerse) return;
-    const sv = state.selectedVerse;
-    if (sv.verseRange) {
-      showToast("Select a single verse to add a note");
-      return;
-    }
-    openNoteModal(sv.bookIndex, sv.chapter, sv.verse, sv.text, sv.book);
-    closeColorPicker();
-  });
 }
 
 // -------- Highlight color filters --------
@@ -1234,6 +1164,9 @@ function init() {
   dom.botRead.addEventListener("click", () => showView("reading"));
   dom.botHighlights.addEventListener("click", () => showView("highlights"));
   dom.botSettings.addEventListener("click", () => showView("settings"));
+
+  // New Note button
+  if (dom.newNoteBtn) dom.newNoteBtn.addEventListener("click", () => openNoteModal(null));
 
   // Split panel close button
   if (dom.hlPanelClose) dom.hlPanelClose.addEventListener("click", closeSplitPanel);
