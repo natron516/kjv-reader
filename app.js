@@ -101,8 +101,15 @@ function initDom() {
     jumpInput:     $("jump-input"),
 
     readingView:   $("reading-view"),
+    searchView:    $("search-view"),
     hlView:        $("highlights-view"),
     settingsView:  $("settings-view"),
+
+    // Search
+    searchInput:    $("search-input"),
+    searchClearBtn: $("search-clear-btn"),
+    searchStatus:   $("search-status"),
+    searchResults:  $("search-results"),
     hlPanelHeader: $("hl-panel-header"),
     hlPanelClose:  $("hl-panel-close"),
 
@@ -114,6 +121,7 @@ function initDom() {
     cpRemove:      $("cp-remove"),
 
     botRead:       $("bot-read"),
+    botSearch:     $("bot-search"),
     botHighlights: $("bot-highlights"),
     botSettings:   $("bot-settings"),
 

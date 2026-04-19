@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1a1a2e" />
   <title>KJV Reader</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
 
@@ -20,9 +20,9 @@
     <button id="nav-prev" title="Previous chapter" aria-label="Previous chapter">&#8592;</button>
     <button id="nav-book-btn">Genesis</button>
     <button id="nav-chapter-btn">Ch 1</button>
-    <button id="nav-next" title="Next chapter" aria-label="Next chapter">&#8594;</button>
-    <div id="nav-spacer"></div>
     <input id="jump-input" type="text" placeholder="John 3&#8230;" autocomplete="off" autocorrect="off" spellcheck="false" />
+    <div id="nav-spacer"></div>
+    <button id="nav-next" title="Next chapter" aria-label="Next chapter">&#8594;</button>
   </nav>
 
   <!-- ===== Main area ===== -->
@@ -36,6 +36,19 @@
       <div id="verse-container">
         <div id="loading-indicator"><div class="spinner"></div>Loading…</div>
       </div>
+    </div>
+
+    <!-- Search View -->
+    <div id="search-view" class="view hidden">
+      <div id="search-header">
+        <div id="search-input-row">
+          <span id="search-icon">🔍</span>
+          <input id="search-input" type="text" placeholder="Search the Bible…" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <button id="search-clear-btn" class="search-clear-btn hidden" aria-label="Clear search">✕</button>
+        </div>
+      </div>
+      <div id="search-status"></div>
+      <div id="search-results"></div>
     </div>
 
     <!-- Highlights View -->
@@ -183,6 +196,10 @@
       <span class="icon">📖</span>
       <span>Read</span>
     </button>
+    <button class="bot-btn" id="bot-search">
+      <span class="icon">🔍</span>
+      <span>Search</span>
+    </button>
     <button class="bot-btn" id="bot-highlights">
       <span class="icon">✏️</span>
       <span>Highlights</span>
@@ -259,15 +276,16 @@
 </div>
 
 <!-- Scripts -->
-<script src="bible-books.js?v=8"></script>
+<script src="bible-books.js?v=16"></script>
 
 <!-- Firebase SDK (compat mode) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="sync.js?v=8"></script>
+<script src="sync.js?v=16"></script>
 
-<script src="app.js?v=14"></script>
+<script src="search.js?v=16"></script>
+<script src="app.js?v=16"></script>
 
 </body>
 </html>
