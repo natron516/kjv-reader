@@ -10,7 +10,7 @@ const HIGHLIGHT_COLORS = [
   { name: "Orange", hex: "#FF9800" },
 ];
 
-const API_BASE = "https://bible-api.com";
+const API_BASE    = "https://bible-api.com";
 const LS_HIGHLIGHTS = "kjv-highlights";
 const LS_POSITION   = "kjv-position";
 const LS_SETTINGS   = "kjv-settings";
@@ -27,7 +27,7 @@ let state = {
     darkMode: true,
   },
   // Selection state
-  selectedVerse: null,    // { bookIndex, chapter, verse }
+  selectedVerse:   null,  // { bookIndex, chapter, verse }
   rangeStartVerse: null,  // verse number when range-selecting
   hlSort:    "date",      // "date" | "book"
   hlFilter:  null,        // color hex or null
@@ -109,11 +109,23 @@ function initDom() {
     botSettings:   $("bot-settings"),
 
     // Highlights view
-    hlTabDate:    $("hl-tab-date"),
-    hlTabBook:    $("hl-tab-book"),
-    hlSearch:     $("hl-search"),
-    hlList:       $("hl-list"),
+    hlTabDate:      $("hl-tab-date"),
+    hlTabBook:      $("hl-tab-book"),
+    hlSearch:       $("hl-search"),
+    hlList:         $("hl-list"),
     hlColorFilters: document.querySelectorAll(".hl-color-filter"),
+    hlSigninPrompt: $("hl-signin-prompt"),
+    hlGoogleSignin: $("hl-google-signin-btn"),
+
+    // Settings — account
+    accountSignedOut:  $("account-signed-out"),
+    accountSignedIn:   $("account-signed-in"),
+    googleSigninBtn:   $("google-signin-btn"),
+    googleSignoutBtn:  $("google-signout-btn"),
+    accountPhoto:      $("account-photo"),
+    accountName:       $("account-name"),
+    accountEmail:      $("account-email"),
+    syncStatusText:    $("sync-status-text"),
 
     // Settings
     fontSlider:    $("font-size-slider"),
@@ -252,7 +264,7 @@ function handleVerseClick(e, verse) {
   const existing = getHighlightForVerse(state.bookIndex, state.chapter, verseNum);
 
   // Close picker if clicking same verse
-  if (state.selectedVerse && !state.colorPicker?.classList.contains("hidden")) {
+  if (state.selectedVerse && !dom.colorPicker.classList.contains("hidden")) {
     const sv = state.selectedVerse;
     const isSame = sv.verse === verseNum || (sv.verseRange && sv.verseRange[0] <= verseNum && sv.verseRange[1] >= verseNum);
     if (isSame) {
@@ -303,6 +315,7 @@ function applyHighlightColor(color) {
   if (!state.selectedVerse) return;
   const sv = state.selectedVerse;
   const book = BIBLE_BOOKS[state.bookIndex];
+  const changed = [];
 
   if (sv.verseRange) {
     // Range highlight
@@ -310,27 +323,36 @@ function applyHighlightColor(color) {
     for (let v = start; v <= end; v++) {
       const vb = dom.verseContainer.querySelector(`[data-verse="${v}"]`);
       const text = vb ? vb.querySelector(".verse-text").textContent : "";
-      upsertHighlight({ bookIndex: state.bookIndex, chapter: state.chapter, verse: v, book: book.name, text, color });
+      const entry = upsertHighlight({ bookIndex: state.bookIndex, chapter: state.chapter, verse: v, book: book.name, text, color });
+      changed.push(entry);
     }
   } else {
-    upsertHighlight({ bookIndex: state.bookIndex, chapter: state.chapter, verse: sv.verse, book: book.name, text: sv.text, color });
+    const entry = upsertHighlight({ bookIndex: state.bookIndex, chapter: state.chapter, verse: sv.verse, book: book.name, text: sv.text, color });
+    changed.push(entry);
   }
 
   saveHighlights();
   refreshVerseHighlights();
   closeColorPicker();
   showToast("Highlighted ✓");
+
+  // Sync each changed highlight to Firestore
+  if (window.Sync) {
+    changed.forEach(h => Sync.onHighlightChange(h));
+  }
 }
 
 function upsertHighlight({ bookIndex, chapter, verse, book, text, color }) {
   const id = `${book.toLowerCase().replace(/\s+/g, "-")}-${chapter}-${verse}`;
   const existing = state.highlights.findIndex(h => h.id === id);
+  const now = new Date().toISOString();
   const entry = {
     id,
     reference: `${book} ${chapter}:${verse}`,
     text,
     color,
-    date: new Date().toISOString(),
+    date:      existing >= 0 ? state.highlights[existing].date : now,
+    updatedAt: now,
     bookIndex,
     book,
     chapter,
@@ -338,23 +360,43 @@ function upsertHighlight({ bookIndex, chapter, verse, book, text, color }) {
   };
   if (existing >= 0) state.highlights[existing] = entry;
   else state.highlights.push(entry);
+  return entry;
 }
 
 function removeHighlight() {
   if (!state.selectedVerse) return;
   const sv = state.selectedVerse;
+  const removedIds = [];
 
   if (sv.verseRange) {
     const [start, end] = sv.verseRange;
-    state.highlights = state.highlights.filter(h => !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end));
+    state.highlights.forEach(h => {
+      if (h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end) {
+        removedIds.push(h.id);
+      }
+    });
+    state.highlights = state.highlights.filter(h =>
+      !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end)
+    );
   } else {
-    state.highlights = state.highlights.filter(h => !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse));
+    const target = state.highlights.find(h =>
+      h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse
+    );
+    if (target) removedIds.push(target.id);
+    state.highlights = state.highlights.filter(h =>
+      !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse)
+    );
   }
 
   saveHighlights();
   refreshVerseHighlights();
   closeColorPicker();
   showToast("Highlight removed");
+
+  // Sync removals to Firestore
+  if (window.Sync) {
+    removedIds.forEach(id => Sync.onHighlightRemove(id));
+  }
 }
 
 function refreshVerseHighlights() {
@@ -526,7 +568,7 @@ function handleJumpKeydown(e) {
 function showView(name) {
   state.view = name;
   ["reading", "highlights", "settings"].forEach(v => {
-    const el = $(`${v}-view`) || $(v + "-view");
+    const el = $(`${v}-view`);
     if (el) el.classList.toggle("hidden", v !== name);
   });
   dom.botRead.classList.toggle("active", name === "reading");
@@ -541,6 +583,12 @@ function showView(name) {
 let hlSearchDebounce;
 
 function renderHighlights() {
+  // Show/hide sign-in prompt
+  if (dom.hlSigninPrompt) {
+    const signedIn = window.Sync && Sync.getCurrentUser();
+    dom.hlSigninPrompt.classList.toggle("hidden", !!signedIn);
+  }
+
   const search = state.hlSearch.toLowerCase();
   let list = [...state.highlights];
 
@@ -667,8 +715,94 @@ function initSettings() {
       saveHighlights();
       showToast("All highlights cleared");
       if (state.view === "highlights") renderHighlights();
+      // Sync deletion to Firestore
+      if (window.Sync) Sync.onAllHighlightsCleared();
     }
   });
+}
+
+// -------- Auth UI --------
+function updateAuthUI(user) {
+  if (!dom.accountSignedOut) return;
+
+  if (user) {
+    dom.accountSignedOut.classList.add("hidden");
+    dom.accountSignedIn.classList.remove("hidden");
+    dom.accountName.textContent  = user.displayName || "Signed In";
+    dom.accountEmail.textContent = user.email || "";
+    if (user.photoURL) {
+      dom.accountPhoto.src = user.photoURL;
+      dom.accountPhoto.style.display = "block";
+    } else {
+      dom.accountPhoto.style.display = "none";
+    }
+    updateSyncStatusText();
+  } else {
+    dom.accountSignedOut.classList.remove("hidden");
+    dom.accountSignedIn.classList.add("hidden");
+  }
+
+  // Update sign-in prompt on highlights view
+  if (dom.hlSigninPrompt) {
+    dom.hlSigninPrompt.classList.toggle("hidden", !!user);
+  }
+}
+
+function updateSyncStatusText() {
+  if (!dom.syncStatusText || !window.Sync) return;
+  dom.syncStatusText.textContent = Sync.getLastSyncedText() || "—";
+}
+
+function initAuthUI() {
+  // Sign-in buttons (settings + highlights prompt)
+  const handleSignIn = async () => {
+    try {
+      await Sync.signInWithGoogle();
+    } catch (err) {
+      showToast("Sign-in failed: " + (err.message || err.code || "unknown error"));
+    }
+  };
+
+  dom.googleSigninBtn.addEventListener("click", handleSignIn);
+  if (dom.hlGoogleSignin) dom.hlGoogleSignin.addEventListener("click", handleSignIn);
+
+  // Sign-out button
+  dom.googleSignoutBtn.addEventListener("click", async () => {
+    await Sync.signOut();
+    showToast("Signed out");
+  });
+
+  // Register sync callbacks
+  Sync.onAuthStateChange(user => {
+    updateAuthUI(user);
+    // Re-load highlights from localStorage (Sync.syncMerge will have updated it)
+    loadHighlights();
+    if (state.view === "highlights") renderHighlights();
+    if (state.view === "reading") refreshVerseHighlights();
+  });
+
+  Sync.onHighlightsUpdate(highlights => {
+    state.highlights = highlights;
+    if (state.view === "highlights") renderHighlights();
+    if (state.view === "reading") refreshVerseHighlights();
+  });
+
+  Sync.onSyncStatus(status => {
+    if (!dom.syncStatusText) return;
+    if (status === 'syncing') {
+      dom.syncStatusText.textContent = "Syncing…";
+      dom.syncStatusText.classList.add("syncing");
+    } else if (status === 'synced') {
+      dom.syncStatusText.classList.remove("syncing");
+      updateSyncStatusText();
+    } else if (status === 'error') {
+      dom.syncStatusText.classList.remove("syncing");
+      dom.syncStatusText.textContent = "Sync error";
+    }
+  });
+
+  // Refresh "X min ago" text every 30 seconds
+  setInterval(updateSyncStatusText, 30_000);
 }
 
 // -------- Toast --------
@@ -764,6 +898,7 @@ function init() {
   initSettings();
   initSwipe();
   initModalClose();
+  initAuthUI();
 
   // Nav buttons
   dom.navPrev.addEventListener("click", prevChapter);
@@ -779,8 +914,6 @@ function init() {
   dom.botSettings.addEventListener("click", () => showView("settings"));
 
   // Build color filter dots in highlights view
-  const hlFiltersEl = document.querySelector(".hl-filters");
-  // Already built in HTML, just set colors
   document.querySelectorAll(".hl-color-filter:not(.all-filter)").forEach((el, i) => {
     if (HIGHLIGHT_COLORS[i]) {
       el.style.background = HIGHLIGHT_COLORS[i].hex;
