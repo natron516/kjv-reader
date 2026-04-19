@@ -836,6 +836,98 @@ body.light .verse-block[data-highlight] .verse-text {
   .account-row { align-items: center; }
 }
 
+/* ---------- Split layout: Bible left, Highlights right (≥768px) ---------- */
+@media (min-width: 768px) {
+
+  /* Main area becomes a flex row */
+  #main-area {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  /* Reading & Highlights become flex children (not absolute layers) */
+  #reading-view,
+  #highlights-view {
+    position: relative;
+    inset: auto;
+    height: 100%;
+    transform: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Reading: left panel, ~60% */
+  #reading-view {
+    flex: 6;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 36px 60px 40px;
+    max-width: none;
+    margin: 0;
+  }
+
+  /* Highlights: right panel, ~40%, always visible */
+  #highlights-view {
+    flex: 4;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  /* Override .hidden on highlights panel — it must always show on iPad */
+  #highlights-view.hidden {
+    transform: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    display: flex !important;
+  }
+
+  /* Highlights panel header (hidden on mobile via default display:none) */
+  .hl-panel-header {
+    display: block;
+    flex: 0 0 auto;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.3px;
+    padding: 15px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  /* Highlights toolbar/list: fill available space, no center-constrained max-width */
+  #hl-toolbar { max-width: none; margin: 0; padding: 12px 16px 8px; }
+  #hl-list    { max-width: none; margin: 0; }
+
+  /* Settings: full-area overlay on top of both panels */
+  #settings-view {
+    position: absolute;
+    inset: 0;
+    z-index: 150;
+    max-width: none;
+    margin: 0;
+    overflow-y: auto;
+    background: var(--bg);
+    padding: 28px 24px 60px;
+  }
+  #settings-view.hidden {
+    display: none !important;
+    transform: none;
+    opacity: 1;
+  }
+
+  /* Hide Highlights tab in bottom nav — panel is always showing */
+  #bot-highlights {
+    display: none;
+  }
+}
+
+/* ---------- Highlights panel header (hidden by default on mobile) ---------- */
+.hl-panel-header {
+  display: none;
+}
+
 /* ---------- Toast ---------- */
 #toast {
   position: fixed;

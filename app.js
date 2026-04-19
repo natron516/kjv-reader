@@ -96,6 +96,7 @@ function initDom() {
     readingView:   $("reading-view"),
     hlView:        $("highlights-view"),
     settingsView:  $("settings-view"),
+    hlPanelHeader: $("hl-panel-header"),
 
     chapterTitle:  $("chapter-title"),
     verseContainer:$("verse-container"),
@@ -333,6 +334,7 @@ function applyHighlightColor(color) {
 
   saveHighlights();
   refreshVerseHighlights();
+  if (isSplitMode()) renderHighlights();
   closeColorPicker();
   showToast("Highlighted ✓");
 
@@ -390,6 +392,7 @@ function removeHighlight() {
 
   saveHighlights();
   refreshVerseHighlights();
+  if (isSplitMode()) renderHighlights();
   closeColorPicker();
   showToast("Highlight removed");
 
@@ -563,19 +566,42 @@ function handleJumpKeydown(e) {
   }
 }
 
+// -------- Split-mode detection --------
+function isSplitMode() {
+  return window.innerWidth >= 768;
+}
+
 // -------- View switching --------
 function showView(name) {
   state.view = name;
-  ["reading", "highlights", "settings"].forEach(v => {
-    const el = $(`${v}-view`);
-    if (el) el.classList.toggle("hidden", v !== name);
-  });
-  dom.botRead.classList.toggle("active", name === "reading");
-  dom.botHighlights.classList.toggle("active", name === "highlights");
-  dom.botSettings.classList.toggle("active", name === "settings");
 
-  if (name === "highlights") renderHighlights();
-  if (name === "reading") closeColorPicker();
+  if (isSplitMode()) {
+    // Split layout: reading + highlights always visible; settings is a full overlay
+    dom.readingView.classList.remove("hidden");
+    dom.hlView.classList.remove("hidden");
+    // Settings is the only view that can overlay everything
+    if (dom.settingsView) dom.settingsView.classList.toggle("hidden", name !== "settings");
+
+    dom.botRead.classList.toggle("active", name !== "settings");
+    dom.botHighlights.classList.remove("active");
+    dom.botSettings.classList.toggle("active", name === "settings");
+
+    // Always keep highlights panel current
+    renderHighlights();
+    if (name === "reading") closeColorPicker();
+  } else {
+    // Mobile: original tab-switching behaviour
+    ["reading", "highlights", "settings"].forEach(v => {
+      const el = $(`${v}-view`);
+      if (el) el.classList.toggle("hidden", v !== name);
+    });
+    dom.botRead.classList.toggle("active", name === "reading");
+    dom.botHighlights.classList.toggle("active", name === "highlights");
+    dom.botSettings.classList.toggle("active", name === "settings");
+
+    if (name === "highlights") renderHighlights();
+    if (name === "reading") closeColorPicker();
+  }
 }
 
 // -------- Highlights view --------
@@ -659,9 +685,18 @@ function createHlCard(h) {
   card.addEventListener("click", () => {
     state.bookIndex = h.bookIndex;
     state.chapter   = h.chapter;
-    showView("reading");
     savePosition();
-    loadAndRenderChapter(h.verse);
+    if (isSplitMode()) {
+      // Stay in split layout; just update the reading panel
+      state.view = "reading";
+      dom.botRead.classList.add("active");
+      dom.botSettings.classList.remove("active");
+      if (dom.settingsView) dom.settingsView.classList.add("hidden");
+      loadAndRenderChapter(h.verse);
+    } else {
+      showView("reading");
+      loadAndRenderChapter(h.verse);
+    }
   });
 
   return card;
@@ -713,7 +748,8 @@ function initSettings() {
       state.highlights = [];
       saveHighlights();
       showToast("All highlights cleared");
-      if (state.view === "highlights") renderHighlights();
+      if (state.view === "highlights" || isSplitMode()) renderHighlights();
+      if (isSplitMode()) refreshVerseHighlights();
       // Sync deletion to Firestore
       if (window.Sync) Sync.onAllHighlightsCleared();
     }
@@ -776,14 +812,14 @@ function initAuthUI() {
     updateAuthUI(user);
     // Re-load highlights from localStorage (Sync.syncMerge will have updated it)
     loadHighlights();
-    if (state.view === "highlights") renderHighlights();
-    if (state.view === "reading") refreshVerseHighlights();
+    if (state.view === "highlights" || isSplitMode()) renderHighlights();
+    if (state.view === "reading" || isSplitMode()) refreshVerseHighlights();
   });
 
   Sync.onHighlightsUpdate(highlights => {
     state.highlights = highlights;
-    if (state.view === "highlights") renderHighlights();
-    if (state.view === "reading") refreshVerseHighlights();
+    if (state.view === "highlights" || isSplitMode()) renderHighlights();
+    if (state.view === "reading" || isSplitMode()) refreshVerseHighlights();
   });
 
   Sync.onSyncStatus(status => {
@@ -920,6 +956,9 @@ function init() {
       el.title = HIGHLIGHT_COLORS[i].name;
     }
   });
+
+  // Resize handler: re-apply view state when orientation/size changes
+  window.addEventListener("resize", () => showView(state.view));
 
   showView("reading");
   loadAndRenderChapter();
