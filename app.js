@@ -486,10 +486,9 @@ function renderBookList() {
       item.textContent = b.name;
       item.addEventListener("click", () => {
         state.bookIndex = i;
-        state.chapter = 1;
         closeBookModal();
-        savePosition();
-        loadAndRenderChapter();
+        // Flow to chapter selection instead of loading chapter 1
+        openChapterModal();
       });
       list.appendChild(item);
     });
