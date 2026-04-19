@@ -789,7 +789,7 @@ body.light .verse-block[data-highlight] .verse-text {
 }
 .hl-signin-prompt.hidden { display: none; }
 
-/* ---------- Responsive — Tablet (iPad) ---------- */
+/* ---------- Responsive — Tablet sizing ---------- */
 @media (min-width: 640px) {
   #reading-view { padding: 28px 40px 32px; max-width: 720px; margin: 0 auto; }
   .book-list { grid-template-columns: repeat(4, 1fr); }
@@ -799,7 +799,7 @@ body.light .verse-block[data-highlight] .verse-text {
 }
 
 @media (min-width: 768px) {
-  /* iPad portrait & landscape */
+  /* iPad portrait & landscape — sizing only, no forced split */
   :root {
     --nav-height: 60px;
     --bot-height: 68px;
@@ -812,43 +812,35 @@ body.light .verse-block[data-highlight] .verse-text {
   }
 
   #chapter-title { font-size: 26px; }
-
   .verse-text { line-height: 1.85; }
 
-  /* More spacious highlights */
   #hl-toolbar { padding: 16px 24px 10px; }
   #hl-list    { padding: 10px 24px 32px; max-width: 760px; margin: 0 auto; }
   .hl-card    { padding: 12px 18px; }
 
-  /* Settings wider */
-  #settings-view { max-width: 640px; margin: 0 auto; padding: 28px 24px 60px; }
+  /* Settings: always overlay with high z-index on iPad */
+  #settings-view { max-width: 640px; margin: 0 auto; padding: 28px 24px 60px; z-index: 150; background: var(--bg); }
 
-  /* Modals */
-  .modal-sheet { max-width: 720px; }
-  .book-list   { grid-template-columns: repeat(5, 1fr); }
+  .modal-sheet  { max-width: 720px; }
+  .book-list    { grid-template-columns: repeat(5, 1fr); }
   .chapter-grid { grid-template-columns: repeat(10, 1fr); }
 
-  /* Bottom nav larger touch targets */
-  .bot-btn { padding: 10px 28px; font-size: 14px; }
+  .bot-btn      { padding: 10px 28px; font-size: 14px; }
   .bot-btn .icon { font-size: 24px; }
 
-  /* Google sign-in button layout — keep side-by-side on iPad */
-  .account-row { align-items: center; }
+  .account-row  { align-items: center; }
 }
 
-/* ---------- Split layout: Bible left, Highlights right (≥768px) ---------- */
+/* ---------- Split layout: toggleable via .split-active on #main-area (≥768px) ---------- */
 @media (min-width: 768px) {
-
-  /* Main area becomes a flex row */
-  #main-area {
+  #main-area.split-active {
     display: flex;
     flex-direction: row;
     overflow: hidden;
   }
 
-  /* Reading & Highlights become flex children (not absolute layers) */
-  #reading-view,
-  #highlights-view {
+  #main-area.split-active #reading-view,
+  #main-area.split-active #highlights-view {
     position: relative;
     inset: auto;
     height: 100%;
@@ -857,8 +849,7 @@ body.light .verse-block[data-highlight] .verse-text {
     pointer-events: auto !important;
   }
 
-  /* Reading: left panel, ~60% */
-  #reading-view {
+  #main-area.split-active #reading-view {
     flex: 6;
     overflow-y: auto;
     border-right: 1px solid var(--border);
@@ -867,41 +858,19 @@ body.light .verse-block[data-highlight] .verse-text {
     margin: 0;
   }
 
-  /* Highlights: right panel, ~40%, always visible */
-  #highlights-view {
+  #main-area.split-active #highlights-view {
     flex: 4;
     overflow-y: auto;
-    display: flex !important;
+    display: flex;
     flex-direction: column;
   }
 
-  /* Override .hidden on highlights panel — it must always show on iPad */
-  #highlights-view.hidden {
-    transform: none !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    display: flex !important;
-  }
+  /* Highlights toolbar/list: unconstrained in split mode */
+  #main-area.split-active #hl-toolbar { max-width: none; margin: 0; padding: 12px 16px 8px; }
+  #main-area.split-active #hl-list    { max-width: none; margin: 0; }
 
-  /* Highlights panel header (hidden on mobile via default display:none) */
-  .hl-panel-header {
-    display: block;
-    flex: 0 0 auto;
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: 0.3px;
-    padding: 15px 16px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg2);
-  }
-
-  /* Highlights toolbar/list: fill available space, no center-constrained max-width */
-  #hl-toolbar { max-width: none; margin: 0; padding: 12px 16px 8px; }
-  #hl-list    { max-width: none; margin: 0; }
-
-  /* Settings: full-area overlay on top of both panels */
-  #settings-view {
+  /* Settings overlays entire main area when split is active */
+  #main-area.split-active #settings-view {
     position: absolute;
     inset: 0;
     z-index: 150;
@@ -911,22 +880,201 @@ body.light .verse-block[data-highlight] .verse-text {
     background: var(--bg);
     padding: 28px 24px 60px;
   }
-  #settings-view.hidden {
+  #main-area.split-active #settings-view.hidden {
     display: none !important;
-    transform: none;
-    opacity: 1;
-  }
-
-  /* Hide Highlights tab in bottom nav — panel is always showing */
-  #bot-highlights {
-    display: none;
   }
 }
 
-/* ---------- Highlights panel header (hidden by default on mobile) ---------- */
+/* ---------- Highlights panel header (hidden by default, shown in split) ---------- */
 .hl-panel-header {
   display: none;
 }
+
+#main-area.split-active .hl-panel-header {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.3px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.hl-panel-close {
+  background: var(--surface2);
+  border: none;
+  color: var(--text2);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: background var(--transition), color var(--transition);
+}
+.hl-panel-close:hover { background: var(--border); color: var(--text); }
+
+/* ---------- Note button in color picker ---------- */
+.cp-note {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+  flex: 0 0 auto;
+}
+.cp-note:hover { background: var(--surface2); }
+
+/* ---------- Verse note indicator ---------- */
+.verse-note-indicator {
+  font-size: 11px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding-top: 5px;
+  opacity: 0.7;
+  transition: opacity 0.15s, transform 0.15s;
+  line-height: 1;
+  user-select: none;
+}
+.verse-note-indicator:hover { opacity: 1; transform: scale(1.2); }
+
+/* ---------- Type filter tabs (All / Highlights / Notes) ---------- */
+.hl-type-tabs {
+  display: flex;
+  gap: 4px;
+}
+.hl-type-tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.hl-type-tab.active {
+  background: var(--accent);
+  color: #1a1a2e;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Note card in highlights list ---------- */
+.hl-card--note {
+  border-left-color: #64B5F6;
+}
+.hl-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.hl-card-icon { font-size: 14px; flex: 0 0 auto; }
+.hl-card-note-text {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: var(--text2);
+  font-style: italic;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- Note modal ---------- */
+.note-modal-sheet { max-height: 75vh; }
+.note-modal-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.note-modal-verse {
+  font-family: Georgia, serif;
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  max-height: 80px;
+  overflow-y: auto;
+}
+.note-textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 15px;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 130px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.note-textarea:focus { border-color: var(--accent); }
+.note-textarea::placeholder { color: var(--text3); }
+.note-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.note-modal-actions-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.note-btn-save {
+  background: #27ae60;
+  border: none;
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 9px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.note-btn-save:hover { background: #219a52; }
+.note-btn-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.note-btn-cancel:hover { background: var(--surface2); }
+.note-btn-delete {
+  background: none;
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.note-btn-delete:hover { background: #c0392b; color: #fff; }
+.note-btn-delete.hidden { display: none; }
 
 /* ---------- Toast ---------- */
 #toast {

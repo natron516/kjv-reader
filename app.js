@@ -10,7 +10,7 @@ const HIGHLIGHT_COLORS = [
   { name: "Orange", hex: "#FF9800" },
 ];
 
-const API_BASE    = "https://bible-api.com";
+const API_BASE      = "https://bible-api.com";
 const LS_HIGHLIGHTS = "kjv-highlights";
 const LS_POSITION   = "kjv-position";
 const LS_SETTINGS   = "kjv-settings";
@@ -27,11 +27,17 @@ let state = {
     darkMode: true,
   },
   // Selection state
-  selectedVerse:   null,  // { bookIndex, chapter, verse }
-  rangeStartVerse: null,  // verse number when range-selecting
-  hlSort:    "date",      // "date" | "book"
-  hlFilter:  null,        // color hex or null
-  hlSearch:  "",
+  selectedVerse:   null,
+  rangeStartVerse: null,
+  // Sort / filter
+  hlSort:       "date",   // "date" | "book"
+  hlFilter:     null,     // color hex or null
+  hlSearch:     "",
+  hlTypeFilter: "all",    // "all" | "highlight" | "note"
+  // Split panel (iPad only)
+  splitOpen:    false,
+  // Note context
+  noteContext:  null,
 };
 
 // -------- Persistence --------
@@ -86,6 +92,7 @@ let dom = {};
 function initDom() {
   dom = {
     app:           $("app"),
+    mainArea:      $("main-area"),
     topNav:        $("top-nav"),
     navPrev:       $("nav-prev"),
     navNext:       $("nav-next"),
@@ -97,6 +104,7 @@ function initDom() {
     hlView:        $("highlights-view"),
     settingsView:  $("settings-view"),
     hlPanelHeader: $("hl-panel-header"),
+    hlPanelClose:  $("hl-panel-close"),
 
     chapterTitle:  $("chapter-title"),
     verseContainer:$("verse-container"),
@@ -104,6 +112,7 @@ function initDom() {
     colorPicker:   $("color-picker"),
     cpDots:        document.querySelectorAll(".cp-dot"),
     cpRemove:      $("cp-remove"),
+    cpNote:        $("cp-note"),
 
     botRead:       $("bot-read"),
     botHighlights: $("bot-highlights"),
@@ -115,6 +124,7 @@ function initDom() {
     hlSearch:       $("hl-search"),
     hlList:         $("hl-list"),
     hlColorFilters: document.querySelectorAll(".hl-color-filter"),
+    hlColorFiltersRow: $("hl-color-filters-row"),
     hlSigninPrompt: $("hl-signin-prompt"),
     hlGoogleSignin: $("hl-google-signin-btn"),
 
@@ -137,6 +147,16 @@ function initDom() {
     // Modals
     bookModal:     $("book-modal"),
     chapterModal:  $("chapter-modal"),
+
+    // Note modal
+    noteModal:          $("note-modal"),
+    noteModalRef:       $("note-modal-ref"),
+    noteModalVerseText: $("note-modal-verse-text"),
+    noteTextarea:       $("note-textarea"),
+    noteBtnSave:        $("note-btn-save"),
+    noteBtnCancel:      $("note-btn-cancel"),
+    noteBtnDelete:      $("note-btn-delete"),
+    noteModalClose:     $("note-modal-close"),
 
     toast:         $("toast"),
   };
@@ -196,13 +216,20 @@ async function loadAndRenderChapter(scrollToVerse) {
 }
 
 function getHighlightForVerse(bookIndex, chapter, verse) {
-  return state.highlights.find(h => h.bookIndex === bookIndex && h.chapter === chapter && h.verse === verse) || null;
+  return state.highlights.find(h => h.type !== 'note' && h.bookIndex === bookIndex && h.chapter === chapter && h.verse === verse) || null;
+}
+
+function getNoteForVerse(bookIndex, chapter, verse) {
+  return state.highlights.find(h => h.type === 'note' && h.bookIndex === bookIndex && h.chapter === chapter && h.verse === verse) || null;
 }
 
 function renderVerses(verses, scrollToVerse) {
   dom.verseContainer.innerHTML = "";
   verses.forEach(v => {
-    const hl = getHighlightForVerse(state.bookIndex, state.chapter, v.verse);
+    const hl   = getHighlightForVerse(state.bookIndex, state.chapter, v.verse);
+    const note = getNoteForVerse(state.bookIndex, state.chapter, v.verse);
+    const verseText = v.text.replace(/\n/g, " ").trim();
+
     const block = document.createElement("div");
     block.className = "verse-block";
     block.dataset.verse = v.verse;
@@ -215,11 +242,18 @@ function renderVerses(verses, scrollToVerse) {
     numEl.className = "verse-num";
     numEl.textContent = v.verse;
 
+    block.appendChild(numEl);
+
+    // Note indicator (between verse-num and verse-text)
+    if (note) {
+      const ind = createNoteIndicator(state.bookIndex, state.chapter, v.verse, verseText);
+      block.appendChild(ind);
+    }
+
     const textEl = document.createElement("span");
     textEl.className = "verse-text";
-    textEl.textContent = v.text.replace(/\n/g, " ").trim();
+    textEl.textContent = verseText;
 
-    block.appendChild(numEl);
     block.appendChild(textEl);
     block.addEventListener("click", e => handleVerseClick(e, v));
     dom.verseContainer.appendChild(block);
@@ -231,6 +265,20 @@ function renderVerses(verses, scrollToVerse) {
       if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
   }
+}
+
+function createNoteIndicator(bookIndex, chapter, verseNum, verseText) {
+  const book = BIBLE_BOOKS[bookIndex];
+  const ind = document.createElement("span");
+  ind.className = "verse-note-indicator";
+  ind.textContent = "📝";
+  const note = getNoteForVerse(bookIndex, chapter, verseNum);
+  if (note) ind.title = note.note;
+  ind.addEventListener("click", e => {
+    e.stopPropagation();
+    openNoteModal(bookIndex, chapter, verseNum, verseText, book.name);
+  });
+  return ind;
 }
 
 // -------- Verse click & highlighting --------
@@ -245,7 +293,6 @@ function handleVerseClick(e, verse) {
   if (!dom.colorPicker.classList.contains("hidden") && state.rangeStartVerse !== null && state.rangeStartVerse !== verseNum) {
     const start = Math.min(state.rangeStartVerse, verseNum);
     const end   = Math.max(state.rangeStartVerse, verseNum);
-    // Visually mark range
     document.querySelectorAll(".verse-block").forEach(b => b.classList.remove("selected", "range-start", "range-end"));
     for (let v = start; v <= end; v++) {
       const vb = dom.verseContainer.querySelector(`[data-verse="${v}"]`);
@@ -255,14 +302,10 @@ function handleVerseClick(e, verse) {
         if (v === end)   vb.classList.add("range-end");
       }
     }
-    // Store range in selectedVerse as {start, end}
     state.selectedVerse = { bookIndex: state.bookIndex, chapter: state.chapter, verseRange: [start, end], text: verseText };
     positionColorPicker(block);
     return;
   }
-
-  // If this verse is already highlighted → show remove option
-  const existing = getHighlightForVerse(state.bookIndex, state.chapter, verseNum);
 
   // Close picker if clicking same verse
   if (state.selectedVerse && !dom.colorPicker.classList.contains("hidden")) {
@@ -274,13 +317,13 @@ function handleVerseClick(e, verse) {
     }
   }
 
-  // Clear selection
+  const existing = getHighlightForVerse(state.bookIndex, state.chapter, verseNum);
+
   document.querySelectorAll(".verse-block").forEach(b => b.classList.remove("selected", "range-start", "range-end"));
   block.classList.add("selected");
   state.selectedVerse = { bookIndex: state.bookIndex, chapter: state.chapter, verse: verseNum, text: verseText, book: book.name };
   state.rangeStartVerse = verseNum;
 
-  // Show color picker; highlight active color if already highlighted
   dom.cpRemove.style.display = existing ? "flex" : "none";
   dom.cpDots.forEach(dot => {
     dot.classList.toggle("active", existing && dot.dataset.color === existing.color);
@@ -291,7 +334,7 @@ function handleVerseClick(e, verse) {
 function positionColorPicker(block) {
   dom.colorPicker.classList.remove("hidden");
   const rect = block.getBoundingClientRect();
-  const pickerW = dom.colorPicker.offsetWidth || 240;
+  const pickerW = dom.colorPicker.offsetWidth || 280;
   const pickerH = dom.colorPicker.offsetHeight || 52;
   const viewW = window.innerWidth;
 
@@ -319,7 +362,6 @@ function applyHighlightColor(color) {
   const changed = [];
 
   if (sv.verseRange) {
-    // Range highlight
     const [start, end] = sv.verseRange;
     for (let v = start; v <= end; v++) {
       const vb = dom.verseContainer.querySelector(`[data-verse="${v}"]`);
@@ -338,7 +380,6 @@ function applyHighlightColor(color) {
   closeColorPicker();
   showToast("Highlighted ✓");
 
-  // Sync each changed highlight to Firestore
   if (window.Sync) {
     changed.forEach(h => Sync.onHighlightChange(h));
   }
@@ -350,6 +391,7 @@ function upsertHighlight({ bookIndex, chapter, verse, book, text, color }) {
   const now = new Date().toISOString();
   const entry = {
     id,
+    type: "highlight",
     reference: `${book} ${chapter}:${verse}`,
     text,
     color,
@@ -373,20 +415,20 @@ function removeHighlight() {
   if (sv.verseRange) {
     const [start, end] = sv.verseRange;
     state.highlights.forEach(h => {
-      if (h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end) {
+      if (h.type !== 'note' && h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end) {
         removedIds.push(h.id);
       }
     });
     state.highlights = state.highlights.filter(h =>
-      !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end)
+      !(h.type !== 'note' && h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse >= start && h.verse <= end)
     );
   } else {
     const target = state.highlights.find(h =>
-      h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse
+      h.type !== 'note' && h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse
     );
     if (target) removedIds.push(target.id);
     state.highlights = state.highlights.filter(h =>
-      !(h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse)
+      !(h.type !== 'note' && h.bookIndex === state.bookIndex && h.chapter === state.chapter && h.verse === sv.verse)
     );
   }
 
@@ -396,7 +438,6 @@ function removeHighlight() {
   closeColorPicker();
   showToast("Highlight removed");
 
-  // Sync removals to Firestore
   if (window.Sync) {
     removedIds.forEach(id => Sync.onHighlightRemove(id));
   }
@@ -405,6 +446,9 @@ function removeHighlight() {
 function refreshVerseHighlights() {
   document.querySelectorAll(".verse-block").forEach(block => {
     const verseNum = parseInt(block.dataset.verse, 10);
+    const verseText = block.querySelector(".verse-text")?.textContent || "";
+
+    // Highlight styling
     const hl = getHighlightForVerse(state.bookIndex, state.chapter, verseNum);
     if (hl) {
       block.dataset.highlight = hl.color;
@@ -413,7 +457,106 @@ function refreshVerseHighlights() {
       delete block.dataset.highlight;
       block.style.removeProperty("--hl-color");
     }
+
+    // Note indicator
+    const note = getNoteForVerse(state.bookIndex, state.chapter, verseNum);
+    let ind = block.querySelector(".verse-note-indicator");
+
+    if (note && !ind) {
+      ind = createNoteIndicator(state.bookIndex, state.chapter, verseNum, verseText);
+      const numEl = block.querySelector(".verse-num");
+      numEl.after(ind);
+    } else if (!note && ind) {
+      ind.remove();
+    }
+    if (ind && note) {
+      ind.title = note.note;
+    }
   });
+}
+
+// -------- Notes --------
+function openNoteModal(bookIndex, chapter, verseNum, verseText, bookName) {
+  const existingNote = getNoteForVerse(bookIndex, chapter, verseNum);
+  const ref = `${bookName} ${chapter}:${verseNum}`;
+
+  dom.noteModalRef.textContent = ref;
+  dom.noteModalVerseText.textContent = verseText;
+  dom.noteTextarea.value = existingNote ? existingNote.note : '';
+  dom.noteBtnDelete.classList.toggle('hidden', !existingNote);
+
+  state.noteContext = { bookIndex, chapter, verse: verseNum, text: verseText, book: bookName, ref };
+
+  dom.noteModal.classList.remove('hidden');
+  setTimeout(() => dom.noteTextarea.focus(), 150);
+}
+
+function closeNoteModal() {
+  dom.noteModal.classList.add('hidden');
+  state.noteContext = null;
+}
+
+function saveNote() {
+  if (!state.noteContext) return;
+  const { bookIndex, chapter, verse, text, book, ref } = state.noteContext;
+  const noteText = dom.noteTextarea.value.trim();
+  if (!noteText) {
+    showToast('Note is empty');
+    return;
+  }
+
+  const existingNote = getNoteForVerse(bookIndex, chapter, verse);
+  const now = new Date().toISOString();
+  const bookSlug = book.toLowerCase().replace(/\s+/g, '-');
+  const id = existingNote ? existingNote.id : `note-${bookSlug}-${chapter}-${verse}-${Date.now()}`;
+
+  const entry = {
+    id,
+    type:      'note',
+    reference: ref,
+    text,
+    note:      noteText,
+    date:      existingNote ? existingNote.date : now,
+    updatedAt: now,
+    book,
+    bookIndex,
+    chapter,
+    verse,
+  };
+
+  if (existingNote) {
+    const idx = state.highlights.findIndex(h => h.id === existingNote.id);
+    if (idx >= 0) state.highlights[idx] = entry;
+    else state.highlights.push(entry);
+  } else {
+    state.highlights.push(entry);
+  }
+
+  saveHighlights();
+  refreshVerseHighlights();
+  if (isSplitMode() || state.view === 'highlights') renderHighlights();
+  closeNoteModal();
+  showToast('Note saved ✓');
+
+  if (window.Sync) Sync.onHighlightChange(entry);
+}
+
+function deleteNote() {
+  if (!state.noteContext) return;
+  const { bookIndex, chapter, verse } = state.noteContext;
+  const existingNote = getNoteForVerse(bookIndex, chapter, verse);
+  if (!existingNote) return;
+
+  const id = existingNote.id;
+  state.highlights = state.highlights.filter(h => h.id !== id);
+
+  saveHighlights();
+  refreshVerseHighlights();
+  if (isSplitMode() || state.view === 'highlights') renderHighlights();
+  closeNoteModal();
+  showToast('Note deleted');
+
+  if (window.Sync) Sync.onHighlightRemove(id);
 }
 
 // -------- Navigation --------
@@ -490,7 +633,6 @@ function renderBookList() {
       item.addEventListener("click", () => {
         state.bookIndex = i;
         closeBookModal();
-        // Small delay so book modal finishes closing before chapter modal opens
         setTimeout(() => openChapterModal(), 50);
       });
       list.appendChild(item);
@@ -500,7 +642,6 @@ function renderBookList() {
     body.appendChild(group);
   });
 
-  // Scroll active book into view
   setTimeout(() => {
     const active = body.querySelector(".book-item.active");
     if (active) active.scrollIntoView({ block: "center" });
@@ -567,30 +708,77 @@ function handleJumpKeydown(e) {
 }
 
 // -------- Split-mode detection --------
+// Returns true only when split panel is actually open on iPad
 function isSplitMode() {
+  return window.innerWidth >= 768 && state.splitOpen;
+}
+
+function isIPad() {
   return window.innerWidth >= 768;
+}
+
+// -------- Split panel (iPad) --------
+function toggleHighlightsPanel() {
+  if (state.splitOpen) closeSplitPanel();
+  else openSplitPanel();
+}
+
+function openSplitPanel() {
+  state.splitOpen = true;
+  state.view = 'highlights';
+  dom.mainArea.classList.add('split-active');
+  dom.hlView.classList.remove('hidden');
+  dom.readingView.classList.remove('hidden');
+  dom.botHighlights.classList.add('active');
+  dom.botRead.classList.remove('active');
+  dom.botSettings.classList.remove('active');
+  renderHighlights();
+}
+
+function closeSplitPanel() {
+  state.splitOpen = false;
+  state.view = 'reading';
+  dom.mainArea.classList.remove('split-active');
+  dom.hlView.classList.add('hidden');
+  dom.botHighlights.classList.remove('active');
+  dom.botRead.classList.add('active');
 }
 
 // -------- View switching --------
 function showView(name) {
   state.view = name;
 
-  if (isSplitMode()) {
-    // Split layout: reading + highlights always visible; settings is a full overlay
-    dom.readingView.classList.remove("hidden");
-    dom.hlView.classList.remove("hidden");
-    // Settings is the only view that can overlay everything
-    if (dom.settingsView) dom.settingsView.classList.toggle("hidden", name !== "settings");
+  if (isIPad()) {
+    // iPad mode
+    if (name === 'highlights') {
+      toggleHighlightsPanel();
+      return;
+    }
 
-    dom.botRead.classList.toggle("active", name !== "settings");
-    dom.botHighlights.classList.remove("active");
-    dom.botSettings.classList.toggle("active", name === "settings");
+    if (name === 'settings') {
+      dom.settingsView.classList.remove('hidden');
+      dom.botSettings.classList.add('active');
+      // Leave split state as-is
+    } else {
+      // reading
+      dom.settingsView.classList.add('hidden');
+      // Close split panel if open
+      if (state.splitOpen) closeSplitPanel();
+      else {
+        dom.botRead.classList.add('active');
+        dom.botHighlights.classList.remove('active');
+        dom.botSettings.classList.remove('active');
+      }
+      closeColorPicker();
+    }
 
-    // Always keep highlights panel current
-    renderHighlights();
-    if (name === "reading") closeColorPicker();
+    // Keep highlights panel current if open
+    if (state.splitOpen) renderHighlights();
   } else {
-    // Mobile: original tab-switching behaviour
+    // Mobile: tab-switching behaviour
+    // Ensure no lingering split-active class
+    dom.mainArea.classList.remove('split-active');
+
     ["reading", "highlights", "settings"].forEach(v => {
       const el = $(`${v}-view`);
       if (el) el.classList.toggle("hidden", v !== name);
@@ -614,18 +802,44 @@ function renderHighlights() {
     dom.hlSigninPrompt.classList.toggle("hidden", !!signedIn);
   }
 
+  // Show/hide color filters based on type filter
+  if (dom.hlColorFiltersRow) {
+    dom.hlColorFiltersRow.style.display = state.hlTypeFilter === 'note' ? 'none' : 'flex';
+  }
+
   const search = state.hlSearch.toLowerCase();
   let list = [...state.highlights];
 
-  // Color filter
-  if (state.hlFilter) list = list.filter(h => h.color === state.hlFilter);
+  // Type filter
+  if (state.hlTypeFilter === 'highlight') {
+    list = list.filter(h => h.type !== 'note');
+  } else if (state.hlTypeFilter === 'note') {
+    list = list.filter(h => h.type === 'note');
+  }
+
+  // Color filter (only for highlights)
+  if (state.hlFilter && state.hlTypeFilter !== 'note') {
+    list = list.filter(h => h.type === 'note' || h.color === state.hlFilter);
+  }
+
   // Search filter
-  if (search) list = list.filter(h => h.text.toLowerCase().includes(search) || h.reference.toLowerCase().includes(search));
+  if (search) {
+    list = list.filter(h =>
+      (h.text  && h.text.toLowerCase().includes(search)) ||
+      (h.note  && h.note.toLowerCase().includes(search)) ||
+      h.reference.toLowerCase().includes(search)
+    );
+  }
 
   dom.hlList.innerHTML = "";
 
   if (list.length === 0) {
-    dom.hlList.innerHTML = `<div class="hl-empty"><div class="hl-empty-icon">✏️</div><p>No highlights yet.<br>Tap any verse while reading to highlight it.</p></div>`;
+    const emptyMsg = state.hlTypeFilter === 'note'
+      ? "No notes yet.<br>Tap a verse then 📝 to add a note."
+      : state.hlTypeFilter === 'highlight'
+      ? "No highlights yet.<br>Tap any verse to highlight it."
+      : "No highlights or notes yet.<br>Tap any verse while reading.";
+    dom.hlList.innerHTML = `<div class="hl-empty"><div class="hl-empty-icon">${state.hlTypeFilter === 'note' ? '📝' : '✏️'}</div><p>${emptyMsg}</p></div>`;
     return;
   }
 
@@ -650,7 +864,6 @@ function renderHighlightsByDate(list) {
 }
 
 function renderHighlightsByBook(list) {
-  // Sort by bookIndex, then chapter, then verse
   list.sort((a, b) => {
     if (a.bookIndex !== b.bookIndex) return a.bookIndex - b.bookIndex;
     if (a.chapter !== b.chapter) return a.chapter - b.chapter;
@@ -672,32 +885,81 @@ function renderHighlightsByBook(list) {
 function createHlCard(h) {
   const card = document.createElement("div");
   card.className = "hl-card";
-  card.style.setProperty("--hl-color", h.color);
 
-  const ref  = document.createElement("div"); ref.className = "hl-card-ref";  ref.textContent = h.reference;
-  const text = document.createElement("div"); text.className = "hl-card-text"; text.textContent = h.text;
-  const date = document.createElement("div"); date.className = "hl-card-date"; date.textContent = formatDate(h.date);
+  if (h.type === 'note') {
+    card.classList.add('hl-card--note');
+    card.style.setProperty("--hl-color", "#64B5F6");
 
-  card.appendChild(ref);
-  card.appendChild(text);
-  card.appendChild(date);
+    const header = document.createElement("div");
+    header.className = "hl-card-header";
 
-  card.addEventListener("click", () => {
-    state.bookIndex = h.bookIndex;
-    state.chapter   = h.chapter;
-    savePosition();
-    if (isSplitMode()) {
-      // Stay in split layout; just update the reading panel
-      state.view = "reading";
-      dom.botRead.classList.add("active");
-      dom.botSettings.classList.remove("active");
-      if (dom.settingsView) dom.settingsView.classList.add("hidden");
-      loadAndRenderChapter(h.verse);
-    } else {
-      showView("reading");
-      loadAndRenderChapter(h.verse);
-    }
-  });
+    const icon = document.createElement("span");
+    icon.className = "hl-card-icon";
+    icon.textContent = "📝";
+
+    const ref = document.createElement("span");
+    ref.className = "hl-card-ref";
+    ref.textContent = h.reference;
+
+    header.appendChild(icon);
+    header.appendChild(ref);
+
+    const noteText = document.createElement("div");
+    noteText.className = "hl-card-text hl-card-note-text";
+    noteText.textContent = h.note;
+
+    const date = document.createElement("div");
+    date.className = "hl-card-date";
+    date.textContent = formatDate(h.date);
+
+    card.appendChild(header);
+    card.appendChild(noteText);
+    card.appendChild(date);
+
+    card.addEventListener("click", () => {
+      state.bookIndex = h.bookIndex;
+      state.chapter   = h.chapter;
+      savePosition();
+      if (isSplitMode()) {
+        state.view = "reading";
+        dom.botRead.classList.add("active");
+        dom.botSettings.classList.remove("active");
+        if (dom.settingsView) dom.settingsView.classList.add("hidden");
+        loadAndRenderChapter(h.verse);
+        setTimeout(() => openNoteModal(h.bookIndex, h.chapter, h.verse, h.text, h.book), 450);
+      } else {
+        showView("reading");
+        loadAndRenderChapter(h.verse);
+        setTimeout(() => openNoteModal(h.bookIndex, h.chapter, h.verse, h.text, h.book), 450);
+      }
+    });
+  } else {
+    card.style.setProperty("--hl-color", h.color);
+
+    const ref  = document.createElement("div"); ref.className = "hl-card-ref";  ref.textContent = h.reference;
+    const text = document.createElement("div"); text.className = "hl-card-text"; text.textContent = h.text;
+    const date = document.createElement("div"); date.className = "hl-card-date"; date.textContent = formatDate(h.date);
+
+    card.appendChild(ref);
+    card.appendChild(text);
+    card.appendChild(date);
+
+    card.addEventListener("click", () => {
+      state.bookIndex = h.bookIndex;
+      state.chapter   = h.chapter;
+      savePosition();
+      if (isSplitMode()) {
+        state.view = "reading";
+        dom.botRead.classList.add("active");
+        dom.botSettings.classList.remove("active");
+        if (dom.settingsView) dom.settingsView.classList.add("hidden");
+        loadAndRenderChapter(h.verse);
+      } else {
+        showView("reading");
+        loadAndRenderChapter(h.verse);
+      }
+    });
+  }
 
   return card;
 }
@@ -744,13 +1006,12 @@ function initSettings() {
   });
 
   dom.clearBtn.addEventListener("click", () => {
-    if (confirm("Clear ALL highlights? This cannot be undone.")) {
+    if (confirm("Clear ALL highlights and notes? This cannot be undone.")) {
       state.highlights = [];
       saveHighlights();
       showToast("All highlights cleared");
       if (state.view === "highlights" || isSplitMode()) renderHighlights();
       if (isSplitMode()) refreshVerseHighlights();
-      // Sync deletion to Firestore
       if (window.Sync) Sync.onAllHighlightsCleared();
     }
   });
@@ -777,7 +1038,6 @@ function updateAuthUI(user) {
     dom.accountSignedIn.classList.add("hidden");
   }
 
-  // Update sign-in prompt on highlights view
   if (dom.hlSigninPrompt) {
     dom.hlSigninPrompt.classList.toggle("hidden", !!user);
   }
@@ -789,7 +1049,6 @@ function updateSyncStatusText() {
 }
 
 function initAuthUI() {
-  // Sign-in buttons (settings + highlights prompt)
   const handleSignIn = async () => {
     try {
       await Sync.signInWithGoogle();
@@ -801,16 +1060,13 @@ function initAuthUI() {
   dom.googleSigninBtn.addEventListener("click", handleSignIn);
   if (dom.hlGoogleSignin) dom.hlGoogleSignin.addEventListener("click", handleSignIn);
 
-  // Sign-out button
   dom.googleSignoutBtn.addEventListener("click", async () => {
     await Sync.signOut();
     showToast("Signed out");
   });
 
-  // Register sync callbacks
   Sync.onAuthStateChange(user => {
     updateAuthUI(user);
-    // Re-load highlights from localStorage (Sync.syncMerge will have updated it)
     loadHighlights();
     if (state.view === "highlights" || isSplitMode()) renderHighlights();
     if (state.view === "reading" || isSplitMode()) refreshVerseHighlights();
@@ -836,7 +1092,6 @@ function initAuthUI() {
     }
   });
 
-  // Refresh "X min ago" text every 30 seconds
   setInterval(updateSyncStatusText, 30_000);
 }
 
@@ -860,6 +1115,17 @@ function initColorPicker() {
     dot.addEventListener("click", e => { e.stopPropagation(); applyHighlightColor(c.hex); });
   });
   dom.cpRemove.addEventListener("click", e => { e.stopPropagation(); removeHighlight(); });
+  dom.cpNote.addEventListener("click", e => {
+    e.stopPropagation();
+    if (!state.selectedVerse) return;
+    const sv = state.selectedVerse;
+    if (sv.verseRange) {
+      showToast("Select a single verse to add a note");
+      return;
+    }
+    openNoteModal(sv.bookIndex, sv.chapter, sv.verse, sv.text, sv.book);
+    closeColorPicker();
+  });
 }
 
 // -------- Highlight color filters --------
@@ -896,11 +1162,25 @@ function initHlFilters() {
     state.hlSearch = dom.hlSearch.value;
     hlSearchDebounce = setTimeout(renderHighlights, 300);
   });
+
+  // Type filter tabs
+  document.querySelectorAll('.hl-type-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.hlTypeFilter = btn.dataset.type;
+      document.querySelectorAll('.hl-type-tab').forEach(b => b.classList.toggle('active', b === btn));
+      // Clear color filter when switching to notes-only
+      if (state.hlTypeFilter === 'note') {
+        state.hlFilter = null;
+        dom.hlColorFilters.forEach(x => x.classList.remove('active'));
+      }
+      renderHighlights();
+    });
+  });
 }
 
 // -------- Keyboard --------
 document.addEventListener("keydown", e => {
-  if (e.target.tagName === "INPUT") return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
   if (e.key === "ArrowLeft")  prevChapter();
   if (e.key === "ArrowRight") nextChapter();
   if (e.key === "Escape")     closeColorPicker();
@@ -908,7 +1188,7 @@ document.addEventListener("keydown", e => {
 
 // Close color picker on outside click
 document.addEventListener("click", e => {
-  if (!dom.colorPicker.contains(e.target) && !e.target.closest(".verse-block")) {
+  if (!dom.colorPicker.classList.contains("hidden") && !dom.colorPicker.contains(e.target) && !e.target.closest(".verse-block")) {
     closeColorPicker();
   }
 });
@@ -919,6 +1199,13 @@ function initModalClose() {
   dom.chapterModal.addEventListener("click", e => { if (e.target === dom.chapterModal) closeChapterModal(); });
   $("book-modal-close").addEventListener("click", closeBookModal);
   $("chapter-modal-close").addEventListener("click", closeChapterModal);
+
+  // Note modal
+  dom.noteModal.addEventListener("click", e => { if (e.target === dom.noteModal) closeNoteModal(); });
+  dom.noteModalClose.addEventListener("click", closeNoteModal);
+  dom.noteBtnCancel.addEventListener("click", closeNoteModal);
+  dom.noteBtnSave.addEventListener("click", saveNote);
+  dom.noteBtnDelete.addEventListener("click", deleteNote);
 }
 
 // -------- Init --------
@@ -948,6 +1235,9 @@ function init() {
   dom.botHighlights.addEventListener("click", () => showView("highlights"));
   dom.botSettings.addEventListener("click", () => showView("settings"));
 
+  // Split panel close button
+  if (dom.hlPanelClose) dom.hlPanelClose.addEventListener("click", closeSplitPanel);
+
   // Build color filter dots in highlights view
   document.querySelectorAll(".hl-color-filter:not(.all-filter)").forEach((el, i) => {
     if (HIGHLIGHT_COLORS[i]) {
@@ -957,8 +1247,14 @@ function init() {
     }
   });
 
-  // Resize handler: re-apply view state when orientation/size changes
-  window.addEventListener("resize", () => showView(state.view));
+  // Resize handler: re-apply view state; clean up split if resizing to mobile
+  window.addEventListener("resize", () => {
+    if (window.innerWidth < 768 && state.splitOpen) {
+      state.splitOpen = false;
+      dom.mainArea.classList.remove('split-active');
+    }
+    showView(state.view);
+  });
 
   showView("reading");
   loadAndRenderChapter();

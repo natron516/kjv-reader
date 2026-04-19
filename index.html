@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1a1a2e" />
   <title>KJV Reader</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
 
@@ -41,7 +41,10 @@
     <!-- Highlights View -->
     <div id="highlights-view" class="view">
       <!-- Panel header (visible only in split layout on iPad) -->
-      <div id="hl-panel-header" class="hl-panel-header">Highlights</div>
+      <div id="hl-panel-header" class="hl-panel-header">
+        Highlights &amp; Notes
+        <button id="hl-panel-close" class="hl-panel-close" aria-label="Close panel">✕</button>
+      </div>
 
       <!-- Sign-in prompt (shown when signed out) -->
       <div id="hl-signin-prompt" class="hl-signin-prompt hidden">
@@ -61,7 +64,12 @@
           <button class="hl-tab active" id="hl-tab-date">By Date</button>
           <button class="hl-tab" id="hl-tab-book">By Book</button>
         </div>
-        <div class="hl-filters">
+        <div class="hl-type-tabs" id="hl-type-tabs">
+          <button class="hl-type-tab active" data-type="all">All</button>
+          <button class="hl-type-tab" data-type="highlight">Highlights</button>
+          <button class="hl-type-tab" data-type="note">Notes</button>
+        </div>
+        <div class="hl-filters" id="hl-color-filters-row">
           <input id="hl-search" type="text" placeholder="Search highlights…" autocomplete="off" />
           <!-- All filter -->
           <div class="hl-color-filter all-filter active" title="All colors" data-color=""></div>
@@ -191,7 +199,30 @@
   <div class="cp-dot" data-color="" title="Pink"></div>
   <div class="cp-dot" data-color="" title="Orange"></div>
   <div class="cp-divider"></div>
+  <button class="cp-note" id="cp-note" title="Add / edit note">📝</button>
+  <div class="cp-divider"></div>
   <button class="cp-remove" id="cp-remove" title="Remove highlight" style="display:none">✕</button>
+</div>
+
+<!-- ===== Note modal ===== -->
+<div id="note-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Verse Note">
+  <div class="modal-sheet note-modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title" id="note-modal-ref">Verse</span>
+      <button class="modal-close" id="note-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body note-modal-body">
+      <div id="note-modal-verse-text" class="note-modal-verse"></div>
+      <textarea id="note-textarea" class="note-textarea" placeholder="Write your note here…"></textarea>
+      <div class="note-modal-actions">
+        <button class="note-btn-delete hidden" id="note-btn-delete">Delete</button>
+        <div class="note-modal-actions-right">
+          <button class="note-btn-cancel" id="note-btn-cancel">Cancel</button>
+          <button class="note-btn-save" id="note-btn-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== Toast ===== -->
@@ -226,15 +257,15 @@
 </div>
 
 <!-- Scripts -->
-<script src="bible-books.js?v=4"></script>
+<script src="bible-books.js?v=5"></script>
 
 <!-- Firebase SDK (compat mode) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="sync.js?v=4"></script>
+<script src="sync.js?v=5"></script>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 
 </body>
 </html>
