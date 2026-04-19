@@ -1165,8 +1165,10 @@ function init() {
   dom.botHighlights.addEventListener("click", () => showView("highlights"));
   dom.botSettings.addEventListener("click", () => showView("settings"));
 
-  // New Note button
+  // New Note buttons (panel + floating)
   if (dom.newNoteBtn) dom.newNoteBtn.addEventListener("click", () => openNoteModal(null));
+  const fabNote = document.getElementById("fab-note");
+  if (fabNote) fabNote.addEventListener("click", () => openNoteModal(null));
 
   // Split panel close button
   if (dom.hlPanelClose) dom.hlPanelClose.addEventListener("click", closeSplitPanel);

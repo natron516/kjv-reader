@@ -924,6 +924,33 @@ body.light .verse-block[data-highlight] .verse-text {
 }
 .hl-panel-close:hover { background: var(--border); color: var(--text); }
 
+/* ---------- Floating Note button on reading view ---------- */
+.fab-note {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.fab-note:active {
+  transform: scale(0.92);
+}
+@media (min-width: 768px) {
+  .fab-note { bottom: 30px; right: 30px; }
+}
+
 /* ---------- New Note button in highlights panel ---------- */
 .new-note-btn {
   display: block;
