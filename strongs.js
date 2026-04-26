@@ -213,8 +213,10 @@ const StrongsDB = (() => {
   // Text BEFORE each <S>number</S> is the English translation of that Strong's number
   function parseVerseBolls(rawText, testament) {
     const prefix = testament === 'NT' ? 'G' : 'H';
+    // Strip marginal notes: <sup>...</sup> tags from KJV alternate readings
+    const cleaned = rawText.replace(/<sup>[^<]*<\/sup>/gi, '');
     // Split on <S>digits</S> keeping the digit captures
-    const parts  = rawText.split(/<S>(\d+)<\/S>/);
+    const parts  = cleaned.split(/<S>(\d+)<\/S>/);
     // parts = [text, num, text, num, ..., trailing]
 
     const tokens = [];
