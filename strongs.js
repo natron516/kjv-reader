@@ -52,7 +52,10 @@ const StrongsDB = (() => {
   async function loadDicts() {
     if (dictLoadState === 'loaded')  return true;
     if (dictLoadState === 'loading') return dictLoadPromise;
-    if (dictLoadState === 'failed')  return false;
+    if (dictLoadState === 'failed') {
+      // Retry on next attempt
+      dictLoadState = null;
+    }
 
     dictLoadState   = 'loading';
     dictLoadPromise = _doLoadDicts().then(ok => {
@@ -67,10 +70,16 @@ const StrongsDB = (() => {
     try {
       const db     = await openDB();
       const cached = await idbGet(db, 'dicts', 'strongs-dicts');
-      if (cached && cached.greek && cached.hebrew) {
+      if (cached && cached.greek && cached.hebrew
+          && Object.keys(cached.greek).length > 100
+          && Object.keys(cached.hebrew).length > 100) {
         greekDict  = cached.greek;
         hebrewDict = cached.hebrew;
+        console.info('[Strongs] Loaded dicts from cache:', Object.keys(greekDict).length, 'Greek,', Object.keys(hebrewDict).length, 'Hebrew');
         return true;
+      } else {
+        // Bad cache — clear it
+        try { const db2 = await openDB(); await idbPut(db2, 'dicts', 'strongs-dicts', null); } catch {}
       }
     } catch {}
 
