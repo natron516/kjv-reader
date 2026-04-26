@@ -6,10 +6,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="KJV Reader" />
-  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="theme-color" content="#0F1118" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
   <title>KJV Reader</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=20" />
 </head>
 <body>
 
@@ -17,12 +18,12 @@
 
   <!-- ===== Top Navigation ===== -->
   <nav id="top-nav">
-    <button id="nav-prev" title="Previous chapter" aria-label="Previous chapter">&#8592;</button>
+    <button id="nav-prev" title="Previous chapter" aria-label="Previous chapter">&#8249;</button>
     <button id="nav-book-btn">Genesis</button>
     <button id="nav-chapter-btn">Ch 1</button>
     <input id="jump-input" type="text" placeholder="John 3&#8230;" autocomplete="off" autocorrect="off" spellcheck="false" />
     <div id="nav-spacer"></div>
-    <button id="nav-next" title="Next chapter" aria-label="Next chapter">&#8594;</button>
+    <button id="nav-next" title="Next chapter" aria-label="Next chapter">&#8250;</button>
   </nav>
 
   <!-- ===== Main area ===== -->
@@ -33,6 +34,7 @@
       <div id="chapter-header">
         <h1 id="chapter-title">Loading…</h1>
       </div>
+      <div id="chapter-divider"></div>
       <div id="verse-container">
         <div id="loading-indicator"><div class="spinner"></div>Loading…</div>
       </div>
@@ -201,7 +203,7 @@
       <span>Search</span>
     </button>
     <button class="bot-btn" id="bot-highlights">
-      <span class="icon">✏️</span>
+      <span class="icon">✨</span>
       <span>Highlights</span>
     </button>
     <button class="bot-btn" id="bot-settings">
@@ -276,16 +278,16 @@
 </div>
 
 <!-- Scripts -->
-<script src="bible-books.js?v=17"></script>
+<script src="bible-books.js?v=20"></script>
 
 <!-- Firebase SDK (compat mode) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="sync.js?v=17"></script>
+<script src="sync.js?v=20"></script>
 
-<script src="search.js?v=17"></script>
-<script src="app.js?v=17"></script>
+<script src="search.js?v=20"></script>
+<script src="app.js?v=20"></script>
 
 </body>
 </html>

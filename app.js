@@ -206,7 +206,7 @@ function updateNavButtons() {
 async function loadAndRenderChapter(scrollToVerse) {
   const book = BIBLE_BOOKS[state.bookIndex];
   updateNavButtons();
-  dom.chapterTitle.textContent = `${book.name} ${state.chapter}`;
+  dom.chapterTitle.innerHTML = `<span id="chapter-title-book">${book.name}</span>Chapter ${state.chapter}`;
   dom.verseContainer.innerHTML = `<div id="loading-indicator"><div class="spinner"></div>Loading…</div>`;
   closeColorPicker();
   state.selectedVerse = null;
@@ -957,11 +957,17 @@ function initSettings() {
   dom.fontSlider.value = state.settings.fontSize;
   dom.fontValue.textContent = state.settings.fontSize + "px";
   dom.darkToggle.checked = state.settings.darkMode;
+  // Init track gradient
+  const initPct = ((state.settings.fontSize - 14) / (28 - 14)) * 100;
+  dom.fontSlider.style.setProperty('--progress', initPct + '%');
 
   dom.fontSlider.addEventListener("input", () => {
     state.settings.fontSize = parseInt(dom.fontSlider.value, 10);
     dom.fontValue.textContent = state.settings.fontSize + "px";
     document.documentElement.style.setProperty("--font-size", state.settings.fontSize + "px");
+    // Update track fill gradient
+    const pct = ((state.settings.fontSize - 14) / (28 - 14)) * 100;
+    dom.fontSlider.style.setProperty('--progress', pct + '%');
     saveSettings();
   });
 
