@@ -105,7 +105,9 @@ const StrongsDB = (() => {
       const text  = await resp.text();
       // File starts with a comment block then: var strongsXxxDictionary = {...};
       // Extract the JSON object
-      const match = text.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+      // File may end with: }; module.exports = ...; — strip that first
+      const cleaned = text.replace(/module\.exports\s*=\s*[^;]*;?\s*$/, '');
+      const match = cleaned.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
       if (!match) return null;
       return JSON.parse(match[1]);
     } catch { return null; }
