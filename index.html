@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#FAF8F5" media="(prefers-color-scheme: light)" />
   <title>KJV Reader</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
 
@@ -277,17 +277,32 @@
   </div>
 </div>
 
+<!-- ===== Strong's Definition Sheet ===== -->
+<div id="strongs-sheet" class="strongs-backdrop hidden" role="dialog" aria-modal="true" aria-label="Word definition">
+  <div class="strongs-sheet-inner">
+    <div class="strongs-handle"></div>
+    <div class="strongs-header">
+      <span class="modal-title">Word Definition</span>
+      <button class="modal-close" id="strongs-close" aria-label="Close">✕</button>
+    </div>
+    <div id="strongs-content" class="strongs-content">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
-<script src="bible-books.js?v=20"></script>
+<script src="bible-books.js?v=21"></script>
 
 <!-- Firebase SDK (compat mode) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="sync.js?v=20"></script>
+<script src="sync.js?v=21"></script>
 
-<script src="search.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="search.js?v=21"></script>
+<script src="strongs.js?v=21"></script>
+<script src="app.js?v=21"></script>
 
 </body>
 </html>

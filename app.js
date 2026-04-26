@@ -1,4 +1,4 @@
-// ===== KJV Reader — app.js =====
+// ===== KJV Reader — app.js v21 =====
 "use strict";
 
 // -------- Constants --------
@@ -38,6 +38,9 @@ let state = {
   splitOpen:    false,
   // Note context
   noteContext:  null,
+  // Strong's state
+  strongsChapterKey: null,  // "BookName:chapter" of currently loaded strongs data
+  strongsReady:      false, // true when word spans are live
 };
 
 // -------- Persistence --------
@@ -152,6 +155,11 @@ function initDom() {
     darkToggle:    $("dark-mode-toggle"),
     clearBtn:      $("clear-highlights-btn"),
 
+    // Strong's sheet
+    strongsSheet:   $("strongs-sheet"),
+    strongsContent: $("strongs-content"),
+    strongsClose:   $("strongs-close"),
+
     // Modals
     bookModal:     $("book-modal"),
     chapterModal:  $("chapter-modal"),
@@ -209,18 +217,152 @@ async function loadAndRenderChapter(scrollToVerse) {
   dom.chapterTitle.innerHTML = `<span id="chapter-title-book">${book.name}</span>Chapter ${state.chapter}`;
   dom.verseContainer.innerHTML = `<div id="loading-indicator"><div class="spinner"></div>Loading…</div>`;
   closeColorPicker();
-  state.selectedVerse = null;
+  closeStrongsSheet();
+  state.selectedVerse   = null;
   state.rangeStartVerse = null;
+  state.strongsReady    = false;
 
   try {
     const verses = await fetchChapter(book.name, state.chapter);
     renderVerses(verses, scrollToVerse);
+    // Kick off Strong's loading in background (don't await — non-blocking)
+    loadStrongsForChapter(state.bookIndex, state.chapter);
   } catch (e) {
     dom.verseContainer.innerHTML = `<div id="loading-indicator" style="color:#e74c3c">
       Failed to load chapter.<br><small>${e.message}</small><br><br>
       <button onclick="loadAndRenderChapter()" style="background:var(--accent);color:#1a1a2e;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:14px;">Retry</button>
     </div>`;
   }
+}
+
+// ---- Strong's: load chapter data and apply word spans ----
+async function loadStrongsForChapter(bookIndex, chapter) {
+  const book       = BIBLE_BOOKS[bookIndex];
+  const chapterKey = `${book.name}:${chapter}`;
+  state.strongsChapterKey = chapterKey;
+
+  try {
+    const verseMap = await StrongsDB.fetchChapterWithStrongs(book.name, bookIndex, chapter);
+    if (!verseMap) return;
+
+    // Guard: user may have navigated away while loading
+    if (state.strongsChapterKey !== chapterKey) return;
+
+    // Apply word-level spans to rendered verses
+    applyStrongsSpans(verseMap);
+  } catch (e) {
+    console.warn('[App] Strongs load error:', e);
+  }
+}
+
+function applyStrongsSpans(verseMap) {
+  document.querySelectorAll('.verse-block').forEach(block => {
+    const verseNum = parseInt(block.dataset.verse, 10);
+    const tokens   = verseMap.get(verseNum);
+    if (!tokens || tokens.length === 0) return;
+
+    const textEl = block.querySelector('.verse-text');
+    if (!textEl) return;
+
+    // Replace text content with word-level spans
+    textEl.textContent = '';
+    tokens.forEach(token => {
+      if (token.strongs) {
+        const span = document.createElement('span');
+        span.className      = 'word-strongs';
+        span.textContent    = token.text;
+        span.dataset.strongs = token.strongs;
+        span.addEventListener('click', e => {
+          e.stopPropagation();
+          handleWordTap(token.text, token.strongs);
+        });
+        textEl.appendChild(span);
+      } else {
+        textEl.appendChild(document.createTextNode(token.text));
+      }
+    });
+  });
+  state.strongsReady = true;
+}
+
+// ---- Word tap → show Strong's sheet ----
+async function handleWordTap(wordText, strongsNum) {
+  // Derive a display word (strip punctuation at edges)
+  const displayWord = wordText.replace(/^[^\w']+|[^\w']+$/g, '').trim() || wordText;
+
+  // Show sheet immediately with loading state
+  showStrongsSheet(displayWord, strongsNum, null, false);
+
+  // Load dictionaries (cached in IDB after first load)
+  const ok  = await StrongsDB.loadDicts();
+  const def = ok ? StrongsDB.getDefinition(strongsNum) : null;
+
+  // Guard: sheet may have been closed while loading
+  if (dom.strongsSheet.classList.contains('hidden')) return;
+
+  // Update with definition
+  showStrongsSheet(displayWord, strongsNum, def, true);
+}
+
+function showStrongsSheet(word, strongsNum, def, dictLoaded) {
+  dom.strongsContent.innerHTML = buildStrongsHTML(word, strongsNum, def, dictLoaded);
+  dom.strongsSheet.classList.remove('hidden');
+}
+
+function closeStrongsSheet() {
+  if (dom.strongsSheet) dom.strongsSheet.classList.add('hidden');
+}
+
+function buildStrongsHTML(word, strongsNum, def, dictLoaded) {
+  const blb = StrongsDB.blbUrl(strongsNum);
+  const prefix = strongsNum ? strongsNum[0] : '';
+  const langLabel = prefix === 'G' ? 'Greek' : (prefix === 'H' ? 'Hebrew' : '');
+
+  let html = `
+    <div class="strongs-word">${escapeHtml(word)}</div>
+    <div class="strongs-num">${escapeHtml(strongsNum || '')}${langLabel ? ' &middot; ' + langLabel : ''}</div>
+  `;
+
+  if (!dictLoaded) {
+    html += `
+      <div class="strongs-load-badge">
+        <span class="spinner-sm"></span> Loading definition…
+      </div>
+    `;
+  } else if (!def) {
+    html += `<div class="strongs-notfound">Definition not found for ${escapeHtml(strongsNum)}.</div>`;
+  } else {
+    html += '<div class="strongs-divider"></div>';
+
+    if (def.lemma) {
+      html += `<div class="strongs-original">${escapeHtml(def.lemma)}</div>`;
+    }
+    if (def.translit || def.xlit) {
+      html += `<div class="strongs-translit">${escapeHtml(def.translit || def.xlit)}</div>`;
+    }
+    if (def.pron) {
+      html += `<div class="strongs-pron">(${escapeHtml(def.pron)})</div>`;
+    }
+    if (def.strongs_def) {
+      // Strip leading/trailing whitespace and dash
+      const cleanDef = def.strongs_def.replace(/^\s*:\s*--?\s*/, '').trim();
+      html += `<div class="strongs-def">${escapeHtml(cleanDef)}</div>`;
+    }
+    if (def.kjv_def) {
+      html += `<div class="strongs-kjv"><strong>KJV usage:</strong> ${escapeHtml(def.kjv_def)}</div>`;
+    }
+    if (def.derivation) {
+      html += `<div class="strongs-deriv">${escapeHtml(def.derivation)}</div>`;
+    }
+  }
+
+  if (blb) {
+    html += `<a href="${blb}" target="_blank" rel="noopener" class="strongs-blb-link">
+      View on Blue Letter Bible →
+    </a>`;
+  }
+
+  return html;
 }
 
 function getHighlightForVerse(bookIndex, chapter, verse) {
@@ -1144,7 +1286,10 @@ document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
   if (e.key === "ArrowLeft")  prevChapter();
   if (e.key === "ArrowRight") nextChapter();
-  if (e.key === "Escape")     closeColorPicker();
+  if (e.key === "Escape") {
+    closeColorPicker();
+    closeStrongsSheet();
+  }
 });
 
 // Close color picker on outside click
@@ -1167,6 +1312,26 @@ function initModalClose() {
   dom.noteBtnCancel.addEventListener("click", closeNoteModal);
   dom.noteBtnSave.addEventListener("click", saveNote);
   dom.noteBtnDelete.addEventListener("click", deleteNote);
+
+  // Strong's sheet
+  if (dom.strongsSheet) {
+    dom.strongsSheet.addEventListener("click", e => {
+      if (e.target === dom.strongsSheet) closeStrongsSheet();
+    });
+  }
+  if (dom.strongsClose) dom.strongsClose.addEventListener("click", closeStrongsSheet);
+
+  // Swipe-to-dismiss on Strong's sheet
+  let sheetTouchY = 0;
+  const sheetInner = document.querySelector('.strongs-sheet-inner');
+  if (sheetInner) {
+    sheetInner.addEventListener('touchstart', e => {
+      sheetTouchY = e.touches[0].clientY;
+    }, { passive: true });
+    sheetInner.addEventListener('touchend', e => {
+      if (e.changedTouches[0].clientY - sheetTouchY > 70) closeStrongsSheet();
+    }, { passive: true });
+  }
 }
 
 // -------- Search --------
@@ -1341,6 +1506,11 @@ function init() {
 
   showView("reading");
   loadAndRenderChapter();
+
+  // Pre-warm Strong's dictionaries in background (after UI is ready)
+  setTimeout(() => {
+    if (typeof StrongsDB !== 'undefined') StrongsDB.loadDicts();
+  }, 2000);
 }
 
 document.addEventListener("DOMContentLoaded", init);
